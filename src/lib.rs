@@ -11,7 +11,7 @@ use std::rt::heap::EMPTY;
 use std::ops;
 use std::marker::PhantomData;
 use std::mem;
-
+use std::str::FromStr;
 use std::ptr::Unique;
 use num::traits::{Num, One};
 
@@ -30,6 +30,7 @@ pub trait Matrix<T> {
 
 // }
 
+// memory arranging
 pub trait Arranging {
     #[inline]
     fn index_of_dim((usize,usize), row: usize, col: usize) -> usize;
@@ -52,8 +53,7 @@ impl Arranging for ColMajor {
     }
 }
 
-
-
+// Dense 2D matrix
 pub struct Dense2D<T, A=RowMajor> {
     data: Vec<T>,
     // row x col
@@ -71,6 +71,35 @@ impl<T, A: Arranging> Dense2D<T, A> {
             }
         }
         res.into_iter()
+    }
+}
+
+impl<T> Dense2D<T> {
+    pub fn from_vec_and_dim(vec: Vec<T>, (nrow, ncol): (usize, usize)) -> Dense2D<T> {
+        assert_eq!(vec.len(), nrow * ncol);
+        Dense2D {
+            data: vec,
+            dim: (nrow, ncol),
+            _marker: PhantomData
+        }
+    }
+}
+
+impl<T> Dense2D<T>
+    where T: FromStr, <T as FromStr>::Err: fmt::Debug {
+    pub fn from_str(s: &str) -> Dense2D<T> {
+        let mut v: Vec<T> = Vec::new();
+        let nrow = s.split(';').map(|s| s.trim()).filter(|s| !s.is_empty()).count();
+        let mut ncol = 0usize;
+
+        s.split(|c| c == ';' || c == ',' || c == ' ')
+            .map(|seg| seg.trim())
+            .filter(|seg| !seg.is_empty())
+            .map(|seg| v.push(seg.parse().unwrap())).count();
+
+        let ncol = v.len() / nrow;
+        assert_eq!(v.len(), ncol * nrow);
+        Dense2D::from_vec_and_dim(v, (nrow, ncol))
     }
 }
 
@@ -146,20 +175,41 @@ impl_ops_for_dense2d!(Add, add);
 impl_ops_for_dense2d!(Sub, sub);
 impl_ops_for_dense2d!(BitAnd, bitand);
 
-// impl<T: ops::Add + Copy, A: Arranging> ops::Add for Dense2D<T, A> {
-//     type Output = Dense2D<T::Output, A>;
-
-//     fn add(self, rhs: Dense2D<T, A>) -> Dense2D<T::Output, A> {
-//         let mut result = Dense2D::new(self.dim.0, self.dim.1);
-//         for (j, i) in self.iter_indices() {
-//             result[(j,i)] = self[(j,i)] + rhs[(j,i)];
-//         }
-//         result
-//     }
-// }
-
+impl<T: ops::Mul + Copy, A: Arranging> Dense2D<T, A> {
+    /// element-wise multiply
+    pub fn x(self, rhs: Dense2D<T, A>) -> Dense2D<T::Output, A> {
+        let mut result = Dense2D::new(self.dim.0, self.dim.1);
+        for (j, i) in self.iter_indices() {
+            result[(j,i)] = self[(j,i)] * rhs[(j,i)];
+        }
+        result
+    }
+}
 
 
+impl<T: Clone, A> Clone for Dense2D<T, A> {
+    fn clone(&self) -> Self {
+        Dense2D {
+            data: self.data.clone(),
+            dim: self.dim,
+            _marker: PhantomData
+        }
+    }
+}
+
+impl<T: PartialEq, A: Arranging> PartialEq for Dense2D<T, A> {
+    fn eq(&self, other: &Self) -> bool {
+        assert_eq!(self.dim, other.dim);
+        for j in 0 .. self.dim.0 {
+            for i in 0 .. self.dim.1 {
+                if self[(j,i)] != other[(j,i)] {
+                    return false;
+                }
+            }
+        }
+        true
+    }
+}
 
 // impl<T: ops::Add<R> + Copy, A: Arranging, R> ops::Add<R> for Dense2D<T, A> {
 //     type Output = Dense2D<T::Output, A>;
@@ -214,15 +264,15 @@ impl_ops_for_dense2d!(BitAnd, bitand);
 // }
 
 
-impl<T: fmt::Debug, A: Arranging> fmt::Debug for Dense2D<T, A> {
+impl<T: fmt::Debug, A> fmt::Debug for Dense2D<T, A> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "<Matrix dim={:?}, {:?}>", self.dim, self.data);
+        try!(write!(f, "<Matrix dim={:?}, {:?}>", self.dim, self.data));
         Ok(())
     }
 }
 
 
-
+#[allow(unused_must_use)]
 impl<T: fmt::Display, A: Arranging> fmt::Display for Dense2D<T, A> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         writeln!(f, "");
@@ -233,7 +283,7 @@ impl<T: fmt::Display, A: Arranging> fmt::Display for Dense2D<T, A> {
                 write!(f, " [");
             }
             for i in 0 .. self.dim.1 {
-                write!(f, "{:-4.2}", self[(j,i)]);
+                write!(f, "{:-4.}", self[(j,i)]);
                 if i == self.dim.1 - 1 {
                     write!(f, "]");
                 } else {
@@ -261,6 +311,25 @@ impl<T: fmt::Display, A: Arranging> fmt::Display for Dense2D<T, A> {
 
 // impl<T> Matrix for Dense2D<T> {
 // }
+#[test]
+fn test_equal_from_str() {
+    let m1 = Dense2D::from_vec_and_dim(vec![1i32, 2, 3, 4], (2, 2));
+    let m2 = Dense2D::from_vec_and_dim(vec![1i32, 2, 3, 4], (2, 2));
+    assert_eq!(m1, m2);
+    assert_eq!(m1, Dense2D::from_str("1 2; 3 4"));
+}
+
+
+#[test]
+fn test_from_vec_and_dim(){
+    let m1 = Dense2D::from_vec_and_dim(vec![1f32, 2f32, 3f32, 4f32], (2, 2));
+    let m2 = Dense2D::from_vec_and_dim(vec![5f32, 6., 7., 8.], (2, 2));
+    println!("m1 * m2 = {}", m1.x(m2));
+
+}
+
+
+
 
 #[test]
 fn test_add() {
@@ -269,7 +338,7 @@ fn test_add() {
 
     let mut rng = thread_rng();
 
-    for i in 0 .. 10 {
+    for _ in 0 .. 10 {
         m1[(rng.gen_range(0, 4), rng.gen_range(0, 4))] = rng.gen();
     }
 
