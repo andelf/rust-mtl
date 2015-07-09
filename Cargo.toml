@@ -1,0 +1,9 @@
+[package]
+name = "mtl"
+version = "0.1.0"
+authors = ["andelf <andelf@gmail.com>"]
+
+
+[dependencies]
+num = "*"
+rand = "*"
