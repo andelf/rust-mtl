@@ -1,10 +1,9 @@
-#![feature(heap_api)]
 extern crate mtl;
 
-
-use std::rt::heap::stats_print;
-
+use mtl::Dense2D;
+use std::str::FromStr;
 
 fn main() {
-    stats_print();
+    let m: Dense2D<f64> = FromStr::from_str("1 2; 3 4").unwrap();
+    println!("{}", m);
 }

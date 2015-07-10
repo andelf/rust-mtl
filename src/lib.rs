@@ -53,6 +53,7 @@ impl Arranging for ColMajor {
     }
 }
 
+
 // Dense 2D matrix
 pub struct Dense2D<T, A=RowMajor> {
     data: Vec<T>,
@@ -85,9 +86,22 @@ impl<T> Dense2D<T> {
     }
 }
 
-impl<T> Dense2D<T>
+#[derive(Debug, Clone, PartialEq)]
+pub struct ParseMatrixError {
+    _priv: ()
+}
+
+impl fmt::Display for ParseMatrixError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        "parse matrix error".fmt(f)
+    }
+}
+
+impl<T> FromStr for Dense2D<T>
     where T: FromStr, <T as FromStr>::Err: fmt::Debug {
-    pub fn from_str(s: &str) -> Dense2D<T> {
+
+    type Err = ParseMatrixError;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
         let mut v: Vec<T> = Vec::new();
         let nrow = s.split(';').map(|s| s.trim()).filter(|s| !s.is_empty()).count();
         let mut ncol = 0usize;
@@ -99,7 +113,7 @@ impl<T> Dense2D<T>
 
         let ncol = v.len() / nrow;
         assert_eq!(v.len(), ncol * nrow);
-        Dense2D::from_vec_and_dim(v, (nrow, ncol))
+        Ok(Dense2D::from_vec_and_dim(v, (nrow, ncol)))
     }
 }
 
@@ -316,7 +330,7 @@ fn test_equal_from_str() {
     let m1 = Dense2D::from_vec_and_dim(vec![1i32, 2, 3, 4], (2, 2));
     let m2 = Dense2D::from_vec_and_dim(vec![1i32, 2, 3, 4], (2, 2));
     assert_eq!(m1, m2);
-    assert_eq!(m1, Dense2D::from_str("1 2; 3 4"));
+    assert_eq!(m1, Dense2D::from_str("1 2; 3 4").unwrap());
 }
 
 
