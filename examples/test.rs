@@ -18,4 +18,7 @@ fn main() {
     print!("after reshape:");
     m.reshape((3, 2));
     println!("{}", m);
+
+    // FIXME: issue #1
+    println!("{}", m + 20.43);
 }

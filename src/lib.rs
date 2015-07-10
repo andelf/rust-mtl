@@ -207,14 +207,13 @@ macro_rules! impl_binary_ops_for_dense2d {
                 result
             }
         }
-
     )
 }
 
 impl_binary_ops_for_dense2d!(Add, add);
 impl_binary_ops_for_dense2d!(Sub, sub);
 impl_binary_ops_for_dense2d!(BitAnd, bitand);
-
+impl_binary_ops_for_dense2d!(Div, div);
 
 
 impl<T: ops::Mul + Copy, A: Arranging> Dense2D<T, A> {
@@ -227,6 +226,22 @@ impl<T: ops::Mul + Copy, A: Arranging> Dense2D<T, A> {
         result
     }
 }
+
+// issue #1
+// FIXME can't impl Add<_> multiple times for a single Type
+// eg for:
+// m + 20.f64
+// impl<RHS: Copy, T: ops::Add<RHS> + Copy, A: Arranging> ops::Add<RHS> for Dense2D<T, A> {
+//     type Output = Dense2D<T::Output, A>;
+
+//     fn add(self, rhs: RHS) -> Dense2D<T::Output, A> {
+//         let mut result = Dense2D::new(self.dim.0, self.dim.1);
+//         for (j, i) in self.iter_indices() {
+//             result[(j,i)] = self[(j,i)] + rhs;
+//         }
+//         result
+//     }
+// }
 
 
 impl<T: Clone, A> Clone for Dense2D<T, A> {
