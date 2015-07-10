@@ -1,19 +1,16 @@
-#![feature(heap_api, associated_consts, unique, unboxed_closures, core)]
+#![feature(unboxed_closures, core, fixed_size_array)]
 
 extern crate num;
 extern crate rand;
-
+extern crate core;
 
 use rand::{thread_rng, Rng};
+use core::array::FixedSizeArray;
 use std::fmt;
-use std::rt::heap::{allocate, deallocate, reallocate, reallocate_inplace, stats_print};
-use std::rt::heap::EMPTY;
 use std::ops;
 use std::marker::PhantomData;
-use std::mem;
 use std::str::FromStr;
-use std::ptr::Unique;
-use num::traits::{Num, One};
+use num::traits::One;
 
 
 pub trait Matrix<T> {
@@ -54,6 +51,31 @@ impl Arranging for ColMajor {
 }
 
 
+// TODO: fit this into Matrix definition
+pub trait MatrixStorage<T> {
+    fn as_slice(&self) -> &[T];
+    fn as_mut_slice(&mut self) -> &mut [T];
+}
+
+impl<T> MatrixStorage<T> for FixedSizeArray<T> {
+    fn as_slice(&self) -> &[T] {
+        FixedSizeArray::<T>::as_slice(self)
+    }
+    fn as_mut_slice(&mut self) -> &mut [T] {
+        FixedSizeArray::<T>::as_mut_slice(self)
+    }
+}
+
+impl<T> MatrixStorage<T> for Vec<T> {
+    fn as_slice(&self) -> &[T] {
+        &self[..]
+    }
+    fn as_mut_slice(&mut self) -> &mut [T] {
+        &mut self[..]
+    }
+}
+
+
 // Dense 2D matrix
 pub struct Dense2D<T, A=RowMajor> {
     data: Vec<T>,
@@ -84,6 +106,11 @@ impl<T> Dense2D<T> {
             _marker: PhantomData
         }
     }
+
+    pub fn reshape(&mut self, (nrow, ncol): (usize, usize)) {
+        assert_eq!(self.dim.0 * self.dim.1, nrow * ncol);
+        self.dim = (nrow, ncol);
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -104,7 +131,6 @@ impl<T> FromStr for Dense2D<T>
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let mut v: Vec<T> = Vec::new();
         let nrow = s.split(';').map(|s| s.trim()).filter(|s| !s.is_empty()).count();
-        let mut ncol = 0usize;
 
         s.split(|c| c == ';' || c == ',' || c == ' ')
             .map(|seg| seg.trim())
@@ -168,9 +194,9 @@ impl<T, A: Arranging> ops::IndexMut<(usize, usize)> for Dense2D<T, A> {
 }
 
 
-macro_rules! impl_ops_for_dense2d {
+macro_rules! impl_binary_ops_for_dense2d {
     ($op:ident, $func:ident) => (
-        impl<T: ops::$op + Copy, A: Arranging> ops::$op for Dense2D<T, A> {
+        impl<T: ops::$op + Copy, A: Arranging> ops::$op<Dense2D<T, A>> for Dense2D<T, A> {
             type Output = Dense2D<T::Output, A>;
 
             fn $func(self, rhs: Dense2D<T, A>) -> Dense2D<T::Output, A> {
@@ -185,9 +211,11 @@ macro_rules! impl_ops_for_dense2d {
     )
 }
 
-impl_ops_for_dense2d!(Add, add);
-impl_ops_for_dense2d!(Sub, sub);
-impl_ops_for_dense2d!(BitAnd, bitand);
+impl_binary_ops_for_dense2d!(Add, add);
+impl_binary_ops_for_dense2d!(Sub, sub);
+impl_binary_ops_for_dense2d!(BitAnd, bitand);
+
+
 
 impl<T: ops::Mul + Copy, A: Arranging> Dense2D<T, A> {
     /// element-wise multiply
@@ -305,7 +333,7 @@ impl<T: fmt::Display, A: Arranging> fmt::Display for Dense2D<T, A> {
                 }
             }
             if j == self.dim.0 - 1 {
-                writeln!(f, "]");
+                write!(f, "]");
             } else {
                 writeln!(f, "");
             }
