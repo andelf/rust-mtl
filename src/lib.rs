@@ -176,6 +176,7 @@ impl<T: One, A: Arranging> Dense2D<T, A> {
     }
 }
 
+// element index
 
 impl<T, A: Arranging> ops::Index<(usize, usize)> for Dense2D<T, A> {
     type Output = T;
@@ -193,10 +194,15 @@ impl<T, A: Arranging> ops::IndexMut<(usize, usize)> for Dense2D<T, A> {
     }
 }
 
+// binary operation
 
 macro_rules! impl_binary_ops_for_dense2d {
     ($op:ident, $func:ident) => (
-        impl<T: ops::$op + Copy, A: Arranging> ops::$op<Dense2D<T, A>> for Dense2D<T, A> {
+        // FIXME: introducing RHS here will cause some other function's type inferring fail
+        //        So `T: Op<T>`
+        // For e.g.:
+        //        m + Matrix::eye(4) will fail to guess type.
+        impl<T: ops::$op<T> + Copy, A: Arranging> ops::$op<Dense2D<T, A>> for Dense2D<T, A> {
             type Output = Dense2D<T::Output, A>;
 
             fn $func(self, rhs: Dense2D<T, A>) -> Dense2D<T::Output, A> {
@@ -207,15 +213,33 @@ macro_rules! impl_binary_ops_for_dense2d {
                 result
             }
         }
+
+        impl<RHS: Copy, T: ops::$op<RHS> + Copy, A: Arranging> ops::$op<RHS> for Dense2D<T, A> {
+            type Output = Dense2D<T::Output, A>;
+
+            fn $func(self, rhs: RHS) -> Dense2D<T::Output, A> {
+                let mut result = Dense2D::new(self.dim.0, self.dim.1);
+                for (j, i) in self.iter_indices() {
+                    result[(j,i)] = self[(j,i)].$func(rhs);
+                }
+                result
+            }
+        }
+
     )
 }
 
 impl_binary_ops_for_dense2d!(Add, add);
-impl_binary_ops_for_dense2d!(Sub, sub);
 impl_binary_ops_for_dense2d!(BitAnd, bitand);
+impl_binary_ops_for_dense2d!(BitOr, bitor);
+impl_binary_ops_for_dense2d!(BitXor, bitxor);
 impl_binary_ops_for_dense2d!(Div, div);
+impl_binary_ops_for_dense2d!(Rem, rem);
+impl_binary_ops_for_dense2d!(Shl, shl);
+impl_binary_ops_for_dense2d!(Shr, shr);
+impl_binary_ops_for_dense2d!(Sub, sub);
 
-
+// special handling for multiply operation
 impl<T: ops::Mul + Copy, A: Arranging> Dense2D<T, A> {
     /// element-wise multiply
     pub fn x(self, rhs: Dense2D<T, A>) -> Dense2D<T::Output, A> {
@@ -227,21 +251,52 @@ impl<T: ops::Mul + Copy, A: Arranging> Dense2D<T, A> {
     }
 }
 
-// issue #1
-// FIXME can't impl Add<_> multiple times for a single Type
-// eg for:
-// m + 20.f64
-// impl<RHS: Copy, T: ops::Add<RHS> + Copy, A: Arranging> ops::Add<RHS> for Dense2D<T, A> {
-//     type Output = Dense2D<T::Output, A>;
+// for m * 2
+impl<RHS: Copy, T: ops::Mul<RHS> + Copy, A: Arranging> ops::Mul<RHS> for Dense2D<T, A> {
+    type Output = Dense2D<T::Output, A>;
 
-//     fn add(self, rhs: RHS) -> Dense2D<T::Output, A> {
-//         let mut result = Dense2D::new(self.dim.0, self.dim.1);
-//         for (j, i) in self.iter_indices() {
-//             result[(j,i)] = self[(j,i)] + rhs;
-//         }
-//         result
-//     }
-// }
+    fn mul(self, rhs: RHS) -> Dense2D<T::Output, A> {
+        let mut result = Dense2D::new(self.dim.0, self.dim.1);
+        for (j, i) in self.iter_indices() {
+            result[(j,i)] = self[(j,i)] * rhs;
+        }
+        result
+    }
+}
+
+impl<T: ops::Mul<T> + Copy, A: Arranging> ops::Mul<Dense2D<T, A>> for Dense2D<T, A> {
+    type Output = Dense2D<T::Output, A>;
+
+    // matrix multiply
+    fn mul(self, rhs: Dense2D<T, A>) -> Dense2D<T::Output, A> {
+        let mut result = Dense2D::new(self.dim.0, self.dim.1);
+        for (j, i) in self.iter_indices() {
+            result[(j,i)] = self[(j,i)] * (rhs[(j,i)]);
+        }
+        result
+    }
+}
+
+// unnary operation
+
+macro_rules! impl_unnary_ops_for_dense2d {
+    ($op:ident, $func:ident) => (
+        impl<T: ops::$op + Copy, A: Arranging> ops::$op for Dense2D<T, A> {
+            type Output = Dense2D<T::Output, A>;
+
+            fn $func(self) -> Dense2D<T::Output, A> {
+                let mut result = Dense2D::new(self.dim.0, self.dim.1);
+                for (j, i) in self.iter_indices() {
+                    result[(j,i)] = self[(j,i)].$func()
+                }
+                result
+            }
+        }
+    )
+}
+
+impl_unnary_ops_for_dense2d!(Neg, neg);
+impl_unnary_ops_for_dense2d!(Not, not);
 
 
 impl<T: Clone, A> Clone for Dense2D<T, A> {
@@ -268,19 +323,6 @@ impl<T: PartialEq, A: Arranging> PartialEq for Dense2D<T, A> {
     }
 }
 
-// impl<T: ops::Add<R> + Copy, A: Arranging, R> ops::Add<R> for Dense2D<T, A> {
-//     type Output = Dense2D<T::Output, A>;
-
-//     fn add(self, rhs: R) -> Dense2D<T::Output, A> {
-//         let mut result = Dense2D::new(self.dim.0, self.dim.1);
-//         for (j, i) in self.iter_indices() {
-//             result[(j,i)] = self[(j,i)] + rhs
-//         }
-//         result
-//     }
-// }
-
-
 // impl<T, A: Arranging> FnOnce<(usize, usize)> for Dense2D<T, A> {
 //     type Output = &T;
 
@@ -306,7 +348,22 @@ impl<T: PartialEq, A: Arranging> PartialEq for Dense2D<T, A> {
 // }
 
 
+// column & row view
 
+pub struct Dense1DView<'a, T: 'a> {
+    inner: &'a [T],
+    index_map: Vec<usize>,
+    size: usize,
+}
+
+pub struct Dense2Dview<'a, T: 'a> {
+    inner: &'a [T],
+    indices_map: Vec<usize>,
+    dim: (usize, usize)
+}
+
+
+// issue #1
 // impl<'a, T> ops::Index<usize> for Dense2D<T> {
 //     type Output = RowView<'a, T>;
 
@@ -385,6 +442,17 @@ fn test_from_vec_and_dim(){
 
 }
 
+#[test]
+fn test_add_sub() {
+    let m1: Dense2D<i32> = FromStr::from_str("1 2; 3 4").unwrap();
+    let m2: Dense2D<i32> = FromStr::from_str("5 6; 7 8").unwrap();
+
+    let m3: Dense2D<i32> = FromStr::from_str("6 8; 10 12").unwrap();
+    let m4: Dense2D<i32> = FromStr::from_str("4 4; 4 4").unwrap();
+
+    assert_eq!(m1.clone() + m2.clone(), m3);
+    assert_eq!(- (m1.clone() - m2.clone()), m4);
+}
 
 
 
