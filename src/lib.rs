@@ -12,6 +12,10 @@ use std::marker::PhantomData;
 use std::str::FromStr;
 use num::traits::One;
 
+use self::dense2d::view::{Dense2DView, Dense2DMutView};
+
+pub mod dense2d;
+
 
 pub trait Matrix<T> {
     fn new(usize, usize) -> Self;
@@ -107,10 +111,72 @@ impl<T> Dense2D<T> {
         }
     }
 
+    pub fn from_vec(vec: Vec<Vec<T>>) -> Dense2D<T> {
+        let nrow = vec.len();
+        let ncol = vec[0].len();
+
+        let mut data = Vec::with_capacity(nrow * ncol);
+        for row in vec {
+            for item in row {
+                data.push(item);
+            }
+        }
+        Dense2D {
+            data: data,
+            dim: (nrow, ncol),
+            _marker: PhantomData
+        }
+    }
+
     pub fn reshape(&mut self, (nrow, ncol): (usize, usize)) {
         assert_eq!(self.dim.0 * self.dim.1, nrow * ncol);
         self.dim = (nrow, ncol);
     }
+
+    pub fn sub_mat<'a>(&'a self, rows: ops::Range<usize>, cols: ops::Range<usize>) -> Dense2DView<'a, T> {
+        let mut indices = Vec::with_capacity(self.dim.0 * self.dim.1);
+        for r in rows.clone() {
+            for c in cols.clone() {
+                indices.push(r * self.dim.1 + c);
+            }
+        }
+        let dim = (rows.end - rows.start, cols.end - cols.start);
+        Dense2DView {
+            inner: &self.data[..],
+            indices_map: indices,
+            dim: dim
+        }
+    }
+
+    pub fn sub_mat_mut<'a>(&'a mut self, rows: ops::Range<usize>, cols: ops::Range<usize>) -> Dense2DMutView<'a, T> {
+        let mut indices = Vec::with_capacity(self.dim.0 * self.dim.1);
+        for r in rows.clone() {
+            for c in cols.clone() {
+                indices.push(r * self.dim.1 + c);
+            }
+        }
+        let dim = (rows.end - rows.start, cols.end - cols.start);
+        Dense2DMutView {
+            inner: &mut self.data[..],
+            indices_map: indices,
+            dim: dim
+        }
+    }
+}
+
+#[test]
+fn test_sub_matrix() {
+    let m = Dense2D::<f32>::from_vec(
+        vec![
+            vec![ 4.30388414,  9.68989408,  5.34990933,  7.35362407,  8.22894712],
+            vec![ 6.59189325,  5.80638887,  1.83820059,  8.37945299,  2.09750041],
+            vec![ 4.08177389,  5.90297463,  9.85854343,  6.6352083 ,  9.39674614],
+            vec![ 4.93510848,  8.0290172 ,  0.03390033,  6.62478427,  5.538189  ],
+            vec![ 8.77494103,  2.39924652,  2.1328074 ,  2.79025214,  3.00513099]]);
+
+    println!("got => {}", m);
+    let m1 = m.sub_mat(1..4, 2..4);
+    println!("sub => {}", m1);
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -347,21 +413,7 @@ impl<T: PartialEq, A: Arranging> PartialEq for Dense2D<T, A> {
 //     }
 // }
 
-
-// column & row view
-
-pub struct Dense1DView<'a, T: 'a> {
-    inner: &'a [T],
-    index_map: Vec<usize>,
-    size: usize,
-}
-
-pub struct Dense2Dview<'a, T: 'a> {
-    inner: &'a [T],
-    indices_map: Vec<usize>,
-    dim: (usize, usize)
-}
-
+// row index
 impl<T> ops::Index<usize> for Dense2D<T> {
     type Output = [T];
 
@@ -381,7 +433,7 @@ impl<T> ops::IndexMut<usize> for Dense2D<T> {
     }
 }
 
-
+// debug show
 impl<T: fmt::Debug, A> fmt::Debug for Dense2D<T, A> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         try!(write!(f, "<Matrix dim={:?}, {:?}>", self.dim, self.data));
@@ -389,8 +441,6 @@ impl<T: fmt::Debug, A> fmt::Debug for Dense2D<T, A> {
     }
 }
 
-
-#[allow(unused_must_use)]
 impl<T: fmt::Display, A: Arranging> fmt::Display for Dense2D<T, A> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         writeln!(f, "");
@@ -420,9 +470,6 @@ impl<T: fmt::Display, A: Arranging> fmt::Display for Dense2D<T, A> {
 
 
 
-
-
-// }
 
 
 #[test]
