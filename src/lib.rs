@@ -427,9 +427,12 @@ impl<T: fmt::Display, A: Arranging> fmt::Display for Dense2D<T, A> {
 
 #[test]
 fn test_index_by_row() {
-    let m1 = Dense2D::from_vec_and_dim(vec![1i32, 2, 3, 4], (2, 2));;
+    let mut m1 = Dense2D::from_vec_and_dim(vec![1i32, 2, 3, 4], (2, 2));;
     assert_eq!(&m1[0], &[1, 2]);
     assert_eq!(&m1[1], &[3, 4]);
+
+    m1[1][1] = 233;
+    assert_eq!(m1[1][1], 233);
 }
 
 #[test]
