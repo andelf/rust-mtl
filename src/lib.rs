@@ -362,20 +362,24 @@ pub struct Dense2Dview<'a, T: 'a> {
     dim: (usize, usize)
 }
 
+impl<T> ops::Index<usize> for Dense2D<T> {
+    type Output = [T];
 
-// issue #1
-// impl<'a, T> ops::Index<usize> for Dense2D<T> {
-//     type Output = RowView<'a, T>;
+    #[inline]
+    fn index<'a>(&'a self, row: usize) -> &'a [T] {
+        assert!(row < self.dim.0);
+        &self.data[row * self.dim.1 .. (row + 1) * self.dim.1]
+    }
+}
 
-//     #[inline]
-//     fn index(&'a self, row: usize) -> &RowView<'a, T> {
-//         let mut ret = Vec::with_capacity(self.ncol);
-//         for i in 0 .. self.ncol {
-//             ret.push(&self.data[row * self.ncol + i])
-//         }
-//         &ret
-//     }
-// }
+impl<T> ops::IndexMut<usize> for Dense2D<T> {
+
+    #[inline]
+    fn index_mut<'a>(&'a mut self, row: usize) -> &'a mut [T] {
+        assert!(row < self.dim.0);
+        &mut self.data[row * self.dim.1 .. (row + 1) * self.dim.1]
+    }
+}
 
 
 impl<T: fmt::Debug, A> fmt::Debug for Dense2D<T, A> {
@@ -421,10 +425,13 @@ impl<T: fmt::Display, A: Arranging> fmt::Display for Dense2D<T, A> {
 // }
 
 
-// pub struct Dense2D<T> { }
+#[test]
+fn test_index_by_row() {
+    let m1 = Dense2D::from_vec_and_dim(vec![1i32, 2, 3, 4], (2, 2));;
+    assert_eq!(&m1[0], &[1, 2]);
+    assert_eq!(&m1[1], &[3, 4]);
+}
 
-// impl<T> Matrix for Dense2D<T> {
-// }
 #[test]
 fn test_equal_from_str() {
     let m1 = Dense2D::from_vec_and_dim(vec![1i32, 2, 3, 4], (2, 2));
