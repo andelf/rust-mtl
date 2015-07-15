@@ -1,6 +1,5 @@
 use std::fmt;
 use std::ops;
-use num::traits::Zero;
 
 // sub matrix view
 pub struct Dense2DView<'a, T: 'a> {
@@ -70,7 +69,7 @@ impl<'a, T: fmt::Debug + Copy> fmt::Debug for Dense2DView<'a, T> {
         let mut view = Vec::new();
         for j in 0 .. self.dim.0 {
             for i in 0 .. self.dim.1 {
-                view.push(self[(j,i)]);
+                view.push(self[j][i]);
             }
         }
         try!(write!(f, "<MatrixView dim={:?}, {:?}>", self.dim, view));
@@ -80,25 +79,25 @@ impl<'a, T: fmt::Debug + Copy> fmt::Debug for Dense2DView<'a, T> {
 
 impl<'a, T: fmt::Display> fmt::Display for Dense2DView<'a, T> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        writeln!(f, "");
+        try!(writeln!(f, ""));
         for j in 0 .. self.dim.0 {
             if j == 0 {
-                write!(f, "[[");
+                try!(write!(f, "[["));
             } else {
-                write!(f, " [");
+                try!(write!(f, " ["));
             }
             for i in 0 .. self.dim.1 {
-                write!(f, "{:-4.}", self[(j,i)]);
+                try!(write!(f, "{:-4.}", self[j][i]));
                 if i == self.dim.1 - 1 {
-                    write!(f, "]");
+                    try!(write!(f, "]"));
                 } else {
-                    write!(f, ", ");
+                    try!(write!(f, ", "));
                 }
             }
             if j == self.dim.0 - 1 {
-                write!(f, "]");
+                try!(write!(f, "]"));
             } else {
-                writeln!(f, "");
+                try!(writeln!(f, ""));
             }
         }
         Ok(())
