@@ -20,16 +20,14 @@ pub mod dense2d;
 pub trait Matrix<T> {
     fn new(usize, usize) -> Self;
     fn transpose(&mut self);
+    fn shape(&self) -> (usize, usize);
+
+    fn get(&self, row: usize, col: usize) -> Option<&T>;
+    fn get_mut(&mut self, row: usize, col: usize) -> Option<&mut T>;
+
+    unsafe fn get_unchecked(&self, row: usize, col: usize) -> &T;
+    unsafe fn get_unchecked_mut(&mut self, row: usize, col: usize) -> &mut T;
 }
-
-
-// pub struct DenseVector<T> {
-//     data: Vec<T>
-// }
-
-// impl DenseVector {
-
-// }
 
 // memory arranging
 pub trait Arranging {
@@ -115,12 +113,13 @@ impl<T> Dense2D<T> {
         let nrow = vec.len();
         let ncol = vec[0].len();
 
-        let mut data = Vec::with_capacity(nrow * ncol);
-        for row in vec {
-            for item in row {
-                data.push(item);
-            }
-        }
+        let data = vec.into_iter().flat_map(|v| v.into_iter()).collect::<Vec<T>>();
+        // let mut data = Vec::with_capacity(nrow * ncol);
+        // for row in vec {
+        //     for item in row {
+        //         data.push(item);
+        //     }
+        // }
         Dense2D {
             data: data,
             dim: (nrow, ncol),
@@ -143,7 +142,8 @@ impl<T> Dense2D<T> {
         let dim = (rows.end - rows.start, cols.end - cols.start);
         Dense2DView {
             inner: &self.data[..],
-            indices_map: indices,
+            orig_dim: self.dim,
+            offset: (rows.start, cols.start),
             dim: dim
         }
     }
@@ -158,7 +158,8 @@ impl<T> Dense2D<T> {
         let dim = (rows.end - rows.start, cols.end - cols.start);
         Dense2DMutView {
             inner: &mut self.data[..],
-            indices_map: indices,
+            orig_dim: self.dim,
+            offset: (rows.start, cols.start),
             dim: dim
         }
     }
@@ -168,15 +169,17 @@ impl<T> Dense2D<T> {
 fn test_sub_matrix() {
     let m = Dense2D::<f32>::from_vec(
         vec![
-            vec![ 4.30388414,  9.68989408,  5.34990933,  7.35362407,  8.22894712],
-            vec![ 6.59189325,  5.80638887,  1.83820059,  8.37945299,  2.09750041],
-            vec![ 4.08177389,  5.90297463,  9.85854343,  6.6352083 ,  9.39674614],
-            vec![ 4.93510848,  8.0290172 ,  0.03390033,  6.62478427,  5.538189  ],
-            vec![ 8.77494103,  2.39924652,  2.1328074 ,  2.79025214,  3.00513099]]);
+            vec![ 4.303,  9.689,  5.349,  7.353,  8.228],
+            vec![ 6.591,  5.806,  1.838,  8.379,  2.097],
+            vec![ 4.081,  5.902,  9.858,  6.635,  9.396],
+            vec![ 4.935,  8.029,  0.033,  6.624,  5.538],
+            vec![ 8.774,  2.399,  2.132,  2.793,  3.005]]);
 
     println!("got => {}", m);
     let m1 = m.sub_mat(1..4, 2..4);
+    println!("sub of -> {:?}", m1.offset);
     println!("sub => {}", m1);
+    println!("sub[1] => {:?}", &m1[1]);
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -209,6 +212,61 @@ impl<T> FromStr for Dense2D<T>
     }
 }
 
+// impl<T> Matrix<T> for Dense2D<T> {
+//     fn new(num_rows: usize, num_cols: usize) -> Dense2D<T> {
+//         let mut v = Vec::with_capacity(num_rows * num_cols);
+//         unsafe { v.set_len(num_rows * num_cols) };
+//         Dense2D {
+//             data: v,
+//             dim: (num_rows, num_cols),
+//             _marker: PhantomData
+//         }
+//     }
+
+//     fn transpose(&mut self) {
+//         assert_eq!(self.dim.0, self.dim.1);
+//         for j in 0 .. self.dim.0 {
+//             for i in 0 .. j + 1 {
+//                 self.data.swap(i * self.dim.1 + j,
+//                                j * self.dim.1 + i);
+//             }
+//         }
+//     }
+
+//     #[inline]
+//     fn shape(&self) -> (usize, usize) {
+//         self.dim
+//     }
+
+//     #[inline]
+//     fn get(&self, row: usize, col: usize) -> Option<&T> {
+//         if row >= self.dim.0 || col >= self.dim.0 {
+//             None
+//         } else {
+//             Some(&self[row][col])
+//         }
+//     }
+
+//     #[inline]
+//     fn get_mut(&mut self, row: usize, col: usize) -> Option<&mut T> {
+//         if row >= self.dim.0 || col >= self.dim.0 {
+//             None
+//         } else {
+//             Some(&mut self[row][col])
+//         }
+//     }
+
+//     #[inline]
+//     unsafe fn get_unchecked(&self, row: usize, col: usize) -> &T {
+//         &self[row][col]
+//     }
+
+//     #[inline]
+//     unsafe fn get_unchecked_mut(&mut self, row: usize, col: usize) -> &mut T {
+//         &mut self[row][col]
+//     }
+// }
+
 impl<T, A: Arranging> Matrix<T> for Dense2D<T, A> {
     fn new(num_rows: usize, num_cols: usize) -> Dense2D<T, A> {
         let mut v = Vec::with_capacity(num_rows * num_cols);
@@ -230,6 +288,39 @@ impl<T, A: Arranging> Matrix<T> for Dense2D<T, A> {
             }
         }
     }
+
+    #[inline]
+    fn shape(&self) -> (usize, usize) {
+        self.dim
+    }
+
+    #[inline]
+    fn get(&self, row: usize, col: usize) -> Option<&T> {
+        if row >= self.dim.0 || col >= self.dim.0 {
+            None
+        } else {
+            Some(&self[(row,col)])
+        }
+    }
+
+    #[inline]
+    fn get_mut(&mut self, row: usize, col: usize) -> Option<&mut T> {
+        if row >= self.dim.0 || col >= self.dim.0 {
+            None
+        } else {
+            Some(&mut self[(row,col)])
+        }
+    }
+
+    #[inline]
+    unsafe fn get_unchecked(&self, row: usize, col: usize) -> &T {
+        &self[(row,col)]
+    }
+
+    #[inline]
+    unsafe fn get_unchecked_mut(&mut self, row: usize, col: usize) -> &mut T {
+        &mut self[(row,col)]
+    }
 }
 
 impl<T: One, A: Arranging> Dense2D<T, A> {
@@ -243,7 +334,27 @@ impl<T: One, A: Arranging> Dense2D<T, A> {
 }
 
 // element index
+// index by row: faster
+impl<T> ops::Index<usize> for Dense2D<T> {
+    type Output = [T];
 
+    #[inline]
+    fn index<'a>(&'a self, row: usize) -> &'a [T] {
+        assert!(row < self.dim.0);
+        &self.data[row * self.dim.1 .. (row + 1) * self.dim.1]
+    }
+}
+
+impl<T> ops::IndexMut<usize> for Dense2D<T> {
+
+    #[inline]
+    fn index_mut<'a>(&'a mut self, row: usize) -> &'a mut [T] {
+        assert!(row < self.dim.0);
+        &mut self.data[row * self.dim.1 .. (row + 1) * self.dim.1]
+    }
+}
+
+// index by tuple: slower
 impl<T, A: Arranging> ops::Index<(usize, usize)> for Dense2D<T, A> {
     type Output = T;
 
@@ -301,8 +412,8 @@ impl_binary_ops_for_dense2d!(BitOr, bitor);
 impl_binary_ops_for_dense2d!(BitXor, bitxor);
 impl_binary_ops_for_dense2d!(Div, div);
 impl_binary_ops_for_dense2d!(Rem, rem);
-impl_binary_ops_for_dense2d!(Shl, shl);
-impl_binary_ops_for_dense2d!(Shr, shr);
+// impl_binary_ops_for_dense2d!(Shl, shl);
+// impl_binary_ops_for_dense2d!(Shr, shr);
 impl_binary_ops_for_dense2d!(Sub, sub);
 
 // special handling for multiply operation
@@ -412,26 +523,6 @@ impl<T: PartialEq, A: Arranging> PartialEq for Dense2D<T, A> {
 //         self.data.into_iter().nth(A::index_of_dim(self.dim, row, col)).unwrap()
 //     }
 // }
-
-// row index
-impl<T> ops::Index<usize> for Dense2D<T> {
-    type Output = [T];
-
-    #[inline]
-    fn index<'a>(&'a self, row: usize) -> &'a [T] {
-        assert!(row < self.dim.0);
-        &self.data[row * self.dim.1 .. (row + 1) * self.dim.1]
-    }
-}
-
-impl<T> ops::IndexMut<usize> for Dense2D<T> {
-
-    #[inline]
-    fn index_mut<'a>(&'a mut self, row: usize) -> &'a mut [T] {
-        assert!(row < self.dim.0);
-        &mut self.data[row * self.dim.1 .. (row + 1) * self.dim.1]
-    }
-}
 
 // debug show
 impl<T: fmt::Debug, A> fmt::Debug for Dense2D<T, A> {
