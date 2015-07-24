@@ -371,8 +371,6 @@ impl_binary_ops_for_dense2d!(BitOr, bitor);
 impl_binary_ops_for_dense2d!(BitXor, bitxor);
 impl_binary_ops_for_dense2d!(Div, div);
 impl_binary_ops_for_dense2d!(Rem, rem);
-// impl_binary_ops_for_dense2d!(Shl, shl);
-// impl_binary_ops_for_dense2d!(Shr, shr);
 impl_binary_ops_for_dense2d!(Sub, sub);
 
 // special handling for multiply operation
@@ -405,14 +403,7 @@ impl<T: ops::Mul<T, Output=T> + ops::Add<T, Output=T> + ::core::num::Zero + Copy
     type Output = Dense2D<T>;
 
     fn mul(self, rhs: Dense2D<T>) -> Dense2D<T> {
-        assert_eq!(self.dim.1, rhs.dim.0);
-        let mut result = Dense2D::new(self.dim.0, rhs.dim.1);
-        for j in 0 .. self.dim.0 {
-            for i in 0 .. rhs.dim.1 {
-                result[j][i] = (0..self.dim.1).map(|k| self[j][k] * rhs[k][i]).sum()
-            }
-        }
-        result
+        (&self).mul(&rhs)
     }
 }
 
@@ -453,6 +444,14 @@ impl<'a, 'b, T: ops::Mul<T, Output=T> + ops::Add<T, Output=T> + ::core::num::Zer
 macro_rules! impl_unnary_ops_for_dense2d {
     ($op:ident, $func:ident) => (
         impl<T: ops::$op + Copy> ops::$op for Dense2D<T> {
+            type Output = Dense2D<T::Output>;
+
+            fn $func(self) -> Dense2D<T::Output> {
+                (&self).$func()
+            }
+        }
+
+        impl<'a, T: ops::$op + Copy> ops::$op for &'a Dense2D<T> {
             type Output = Dense2D<T::Output>;
 
             fn $func(self) -> Dense2D<T::Output> {
@@ -624,5 +623,6 @@ fn it_works() {
 
 
     let m = Dense2D::<f32>::eye(4);
-    println!("Matrix => {}", m);
+    println!("Matrix => {}", &m);
+    println!("Matrix => {}", - &m);
 }
