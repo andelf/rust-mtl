@@ -19,5 +19,5 @@ fn main() {
     m.reshape((3, 2));
     println!("{}", m);
 
-    println!("{}", m + 20.43);
+    println!("{}", &m + &m);
 }
