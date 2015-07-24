@@ -1,4 +1,4 @@
-#![feature(unboxed_closures, core, fixed_size_array)]
+#![feature(unboxed_closures, core, fixed_size_array, zero_one, iter_arith)]
 
 extern crate num;
 extern crate rand;
@@ -50,7 +50,6 @@ impl<T> MatrixStorage<T> for Vec<T> {
         &mut self[..]
     }
 }
-
 
 // Dense 2D matrix
 pub struct Dense2D<T> {
@@ -310,7 +309,20 @@ macro_rules! impl_binary_ops_for_dense2d {
         //        So `T: Op<T>`
         // For e.g.:
         //        m + Matrix::eye(4) will fail to guess type.
-        impl<T: ops::$op<T> + Copy> ops::$op<Dense2D<T>> for Dense2D<T> {
+        impl<T: ops::$op<T, Output=T> + Copy> ops::$op for Dense2D<T> {
+            type Output = Dense2D<T>;
+
+            fn $func(self, rhs: Dense2D<T>) -> Dense2D<T> {
+                let mut result = Dense2D::new(self.dim.0, self.dim.1);
+                for (j, i) in self.iter_indices() {
+                    result[j][i] = self[j][i].$func(rhs[j][i]);
+                }
+                result
+            }
+        }
+
+        // &M op M
+        impl<'a, T: ops::$op<T> + Copy> ops::$op<Dense2D<T>> for &'a Dense2D<T> {
             type Output = Dense2D<T::Output>;
 
             fn $func(self, rhs: Dense2D<T>) -> Dense2D<T::Output> {
@@ -321,7 +333,33 @@ macro_rules! impl_binary_ops_for_dense2d {
                 result
             }
         }
+        // FIXME: M op &M
+        // this will conflicts
+        // impl<'a, T: ops::$op<T> + Copy> ops::$op<&'a Dense2D<T>> for Dense2D<T> {
+        //     type Output = Dense2D<T::Output>;
 
+        //     fn $func(self, rhs: &'a Dense2D<T>) -> Dense2D<T::Output> {
+        //         let mut result = Dense2D::new(self.dim.0, self.dim.1);
+        //         for (j, i) in self.iter_indices() {
+        //             result[j][i] = self[j][i].$func(rhs[j][i]);
+        //         }
+        //         result
+        //     }
+        // }
+        // &M op &M
+        impl<'a, 'b, T: ops::$op<T> + Copy> ops::$op<&'a Dense2D<T>> for &'b Dense2D<T> {
+            type Output = Dense2D<T::Output>;
+
+            fn $func(self, rhs: &'a Dense2D<T>) -> Dense2D<T::Output> {
+                let mut result = Dense2D::new(self.dim.0, self.dim.1);
+                for (j, i) in self.iter_indices() {
+                    result[j][i] = self[j][i].$func(rhs[j][i]);
+                }
+                result
+            }
+        }
+
+        // M + s
         impl<RHS: Copy, T: ops::$op<RHS> + Copy> ops::$op<RHS> for Dense2D<T> {
             type Output = Dense2D<T::Output>;
 
@@ -350,7 +388,7 @@ impl_binary_ops_for_dense2d!(Sub, sub);
 // special handling for multiply operation
 impl<T: ops::Mul + Copy> Dense2D<T> {
     /// element-wise multiply
-    pub fn x(self, rhs: Dense2D<T>) -> Dense2D<T::Output> {
+    pub fn x(self, rhs: &Dense2D<T>) -> Dense2D<T::Output> {
         let mut result = Dense2D::new(self.dim.0, self.dim.1);
         for (j, i) in self.iter_indices() {
             result[j][i] = self[j][i] * rhs[j][i];
@@ -372,18 +410,48 @@ impl<RHS: Copy, T: ops::Mul<RHS> + Copy> ops::Mul<RHS> for Dense2D<T> {
     }
 }
 
-impl<T: ops::Mul<T> + Copy> ops::Mul<Dense2D<T>> for Dense2D<T> {
-    type Output = Dense2D<T::Output>;
+// matrix multiply
+impl<T: ops::Mul<T, Output=T> + ops::Add<T, Output=T> + ::core::num::Zero + Copy> ops::Mul<Dense2D<T>> for Dense2D<T> {
+    type Output = Dense2D<T>;
 
-    // matrix multiply
-    fn mul(self, rhs: Dense2D<T>) -> Dense2D<T::Output> {
-        let mut result = Dense2D::new(self.dim.0, self.dim.1);
-        for (j, i) in self.iter_indices() {
-            result[j][i] = self[j][i] * (rhs[j][i]);
+    fn mul(self, rhs: Dense2D<T>) -> Dense2D<T> {
+        assert_eq!(self.dim.1, rhs.dim.0);
+        let mut result = Dense2D::new(self.dim.0, rhs.dim.1);
+        for j in 0 .. self.dim.0 {
+            for i in 0 .. rhs.dim.1 {
+                result[j][i] = (0..self.dim.1).map(|k| self[j][k] * rhs[k][i]).sum()
+            }
         }
         result
     }
 }
+
+impl<'a, T: ops::Mul<T, Output=T> + ops::Add<T, Output=T> + ::core::num::Zero + Copy> ops::Mul<Dense2D<T>> for &'a Dense2D<T> {
+    type Output = Dense2D<T>;
+
+    fn mul(self, rhs: Dense2D<T>) -> Dense2D<T> {
+        assert_eq!(self.dim.1, rhs.dim.0);
+        self.clone() * rhs
+    }
+}
+
+// ：（ conflicts
+// impl<'a, T: ops::Mul<T, Output=T> + ops::Add<T, Output=T> + ::core::num::Zero + Copy> ops::Mul<&'a Dense2D<T>> for Dense2D<T> {
+//     type Output = Dense2D<T>;
+
+//     fn mul(self, rhs: &'a Dense2D<T>) -> Dense2D<T> {
+//         self * rhs.clone()
+//     }
+// }
+
+impl<'a, 'b, T: ops::Mul<T, Output=T> + ops::Add<T, Output=T> + ::core::num::Zero + Copy> ops::Mul<&'a Dense2D<T>> for &'b Dense2D<T> {
+    type Output = Dense2D<T>;
+
+    fn mul(self, rhs: &'a Dense2D<T>) -> Dense2D<T> {
+        self.clone() * rhs.clone()
+    }
+}
+
 
 // unnary operation
 
@@ -489,7 +557,7 @@ fn test_equal_from_str() {
 fn test_from_vec_and_dim(){
     let m1 = Dense2D::from_vec_and_dim(vec![1f32, 2f32, 3f32, 4f32], (2, 2));
     let m2 = Dense2D::from_vec_and_dim(vec![5f32, 6., 7., 8.], (2, 2));
-    println!("m1 * m2 = {}", m1.x(m2));
+    println!("m1 * m2 = {}", m1.x(&m2));
 
 }
 
@@ -505,6 +573,16 @@ fn test_add_sub() {
     assert_eq!(- (m1.clone() - m2.clone()), m4);
 }
 
+#[test]
+fn test_matrix_multiply() {
+    let m0: Dense2D<i32> = FromStr::from_str("1 0; 0 1").unwrap();
+    let m1: Dense2D<i32> = FromStr::from_str("1 2; 3 4").unwrap();
+    let m2: Dense2D<i32> = FromStr::from_str("5 6; 7 8").unwrap();
+
+    let res: Dense2D<i32> = FromStr::from_str("19 22; 43 50").unwrap();
+    assert_eq!(res, (&m1 * &m2));
+    assert_eq!(m1, (&m1 * &m0));
+}
 
 
 #[test]
