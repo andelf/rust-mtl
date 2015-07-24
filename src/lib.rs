@@ -1,4 +1,7 @@
 #![feature(unboxed_closures, core, fixed_size_array, zero_one, iter_arith)]
+#![warn(bad_style, unused, unused_import_braces,
+        unused_qualifications, unused_results)]
+
 
 extern crate num;
 extern crate rand;
@@ -174,7 +177,7 @@ impl<T> FromStr for Dense2D<T>
         let mut v: Vec<T> = Vec::new();
         let nrow = s.split(';').map(|s| s.trim()).filter(|s| !s.is_empty()).count();
 
-        s.split(|c| c == ';' || c == ',' || c == ' ')
+        let _ = s.split(|c| c == ';' || c == ',' || c == ' ')
             .map(|seg| seg.trim())
             .filter(|seg| !seg.is_empty())
             .map(|seg| v.push(seg.parse().unwrap())).count();
