@@ -13,6 +13,9 @@ use std::ops;
 use std::str::FromStr;
 use num::traits::{One, Zero};
 
+
+pub mod array;
+
 use self::view::{MatrixSubView, MatrixMutSubView};
 
 pub mod view;
