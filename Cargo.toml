@@ -1,6 +1,6 @@
 [package]
 name = "mtl"
-version = "0.1.0"
+version = "0.1.1"
 authors = ["andelf <andelf@gmail.com>"]
 license = "MIT"
 readme = "README.md"
