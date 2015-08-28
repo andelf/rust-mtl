@@ -13,7 +13,7 @@ use std::ops;
 use std::str::FromStr;
 use num::traits::{One, Zero};
 
-use self::dense2d::view::{Dense2DView, Dense2DMutView};
+use self::dense2d::view::{Dense2DSubView, Dense2DMutSubView};
 
 pub mod dense2d;
 
@@ -108,7 +108,7 @@ impl<T> Dense2D<T> {
         self.dim = (nrow, ncol);
     }
 
-    pub fn sub_mat<'a>(&'a self, rows: ops::Range<usize>, cols: ops::Range<usize>) -> Dense2DView<'a, T> {
+    pub fn sub_mat<'a>(&'a self, rows: ops::Range<usize>, cols: ops::Range<usize>) -> Dense2DSubView<'a, T> {
         let mut indices = Vec::with_capacity(self.dim.0 * self.dim.1);
         for r in rows.clone() {
             for c in cols.clone() {
@@ -116,7 +116,7 @@ impl<T> Dense2D<T> {
             }
         }
         let dim = (rows.end - rows.start, cols.end - cols.start);
-        Dense2DView {
+        Dense2DSubView {
             inner: &self.data[..],
             orig_dim: self.dim,
             offset: (rows.start, cols.start),
@@ -124,7 +124,7 @@ impl<T> Dense2D<T> {
         }
     }
 
-    pub fn sub_mat_mut<'a>(&'a mut self, rows: ops::Range<usize>, cols: ops::Range<usize>) -> Dense2DMutView<'a, T> {
+    pub fn sub_mat_mut<'a>(&'a mut self, rows: ops::Range<usize>, cols: ops::Range<usize>) -> Dense2DMutSubView<'a, T> {
         let mut indices = Vec::with_capacity(self.dim.0 * self.dim.1);
         for r in rows.clone() {
             for c in cols.clone() {
@@ -132,7 +132,7 @@ impl<T> Dense2D<T> {
             }
         }
         let dim = (rows.end - rows.start, cols.end - cols.start);
-        Dense2DMutView {
+        Dense2DMutSubView {
             inner: &mut self.data[..],
             orig_dim: self.dim,
             offset: (rows.start, cols.start),

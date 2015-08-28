@@ -1,14 +1,20 @@
 use std::fmt;
 use std::ops;
 
+pub struct Dense2DElementWiseView<'a, T: 'a> {
+    pub inner: &'a [T],
+    pub dim: (usize, usize)
+}
+
+
 // sub matrix view
-pub struct Dense2DView<'a, T: 'a> {
+pub struct Dense2DSubView<'a, T: 'a> {
     pub inner: &'a [T],
     pub orig_dim: (usize, usize),
     pub offset: (usize, usize),
     pub dim: (usize, usize)
 }
-pub struct Dense2DMutView<'a, T: 'a> {
+pub struct Dense2DMutSubView<'a, T: 'a> {
     pub inner: &'a mut [T],
     pub orig_dim: (usize, usize),
     pub offset: (usize, usize),
@@ -16,7 +22,7 @@ pub struct Dense2DMutView<'a, T: 'a> {
 }
 
 
-impl<'a, T> Dense2DView<'a, T> {
+impl<'a, T> Dense2DSubView<'a, T> {
     #[inline]
     fn map_index(&self, row: usize, col: usize) -> Option<usize> {
         if row >= self.dim.0 {
@@ -29,7 +35,7 @@ impl<'a, T> Dense2DView<'a, T> {
     }
 }
 
-impl<'a, T> ops::Index<(usize, usize)> for Dense2DView<'a, T> {
+impl<'a, T> ops::Index<(usize, usize)> for Dense2DSubView<'a, T> {
     type Output = T;
 
     #[inline]
@@ -42,7 +48,7 @@ impl<'a, T> ops::Index<(usize, usize)> for Dense2DView<'a, T> {
 }
 
 
-impl<'a, T> ops::Index<usize> for Dense2DView<'a, T> {
+impl<'a, T> ops::Index<usize> for Dense2DSubView<'a, T> {
     type Output = [T];
 
     #[inline]
@@ -54,7 +60,7 @@ impl<'a, T> ops::Index<usize> for Dense2DView<'a, T> {
     }
 }
 
-// impl<'a, T> ops::IndexMut<usize> for Dense2DView<'a, T> {
+// impl<'a, T> ops::IndexMut<usize> for Dense2DSubView<'a, T> {
 //     #[inline]
 //     fn index_mut<'a>(&'a mut self, row: usize) -> &'a mut [T] {
 //         assert!(row < self.dim.0);
@@ -64,7 +70,7 @@ impl<'a, T> ops::Index<usize> for Dense2DView<'a, T> {
 
 
 
-impl<'a, T: fmt::Debug + Copy> fmt::Debug for Dense2DView<'a, T> {
+impl<'a, T: fmt::Debug + Copy> fmt::Debug for Dense2DSubView<'a, T> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let mut view = Vec::new();
         for j in 0 .. self.dim.0 {
@@ -72,12 +78,12 @@ impl<'a, T: fmt::Debug + Copy> fmt::Debug for Dense2DView<'a, T> {
                 view.push(self[j][i]);
             }
         }
-        try!(write!(f, "<MatrixView dim={:?}, {:?}>", self.dim, view));
+        try!(write!(f, "<MatrixSubView dim={:?}, {:?}>", self.dim, view));
         Ok(())
     }
 }
 
-impl<'a, T: fmt::Display> fmt::Display for Dense2DView<'a, T> {
+impl<'a, T: fmt::Display> fmt::Display for Dense2DSubView<'a, T> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         try!(writeln!(f, ""));
         for j in 0 .. self.dim.0 {
