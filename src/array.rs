@@ -4,6 +4,8 @@ use std::ops::{Range, RangeFrom, RangeTo, RangeFull};
 use std::iter;
 use std::iter::FromIterator;
 
+use num::traits::{One, Zero};
+
 //
 pub trait ArrayIx {
     fn to_idx_vec(&self, ax: usize, dims: &[usize]) -> Vec<usize>;
@@ -110,13 +112,74 @@ macro_rules! simple_impl_for_array {
     )
 }
 
+pub struct ArrayIndexIter<'a, T: 'a> {
+    arr: &'a Array<T>,
+    current: Vec<usize>,
+    shape: Vec<usize>
+}
+
+impl<'a, T> Iterator for ArrayIndexIter<'a, T> {
+    type Item = Vec<usize>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let ndim = self.shape.len();
+        if self.current[0] >= self.shape[0] {
+            return None;
+        }
+        let old_current = self.current.clone();
+        self.current.last_mut().map(|k| *k += 1);
+        for i in (0 .. ndim).rev() {
+            if self.current[i] == self.shape[i] && i > 0 {
+                self.current[i] = 0;
+                self.current[i-1] += 1;
+            }
+        }
+        Some(old_current)
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let sz = self.shape.iter()
+            .zip(self.current.iter())
+            .map(|(&sz, &i)| (sz - i -1) * sz).product();
+        (sz, Some(sz))
+    }
+}
+
 
 impl<T: Copy> Array<T> {
-    pub fn new(v: Vec<T>) -> Array<T> {
+    pub fn new<S: AsRef<[usize]>>(shape: S) -> Array<T> {
+        let nelem = shape.as_ref().iter().product();
+        let mut v = Vec::with_capacity(nelem);
+        unsafe { v.set_len(nelem) };
+        Array {
+            data: v,
+            shape: shape.as_ref().to_vec()
+        }
+    }
+
+    pub fn iter_indices<'a>(&'a self) -> ArrayIndexIter<'a, T> {
+        let shape = self.shape();
+        let zeros = iter::repeat(0).take(shape.len()).collect();
+        ArrayIndexIter {
+            arr: self,
+            current: zeros,
+            shape: shape
+        }
+    }
+
+    pub fn from_vec(v: Vec<T>) -> Array<T> {
         let nelem = v.len();
         Array {
             data: v,
             shape: vec![nelem]
+        }
+    }
+
+    pub fn new_with_shape(v: Vec<T>, shape: Vec<usize>) -> Array<T> {
+        assert!(shape.clone().iter().product::<usize>() == v.len());
+        Array {
+            data: v,
+            shape: shape
         }
     }
 
@@ -157,7 +220,7 @@ impl<T: Copy> Array<T> {
 
 impl<A: Copy> FromIterator<A> for Array<A> {
     fn from_iter<T: IntoIterator<Item=A>>(iterator: T) -> Self {
-        Array::new(iterator.into_iter().collect())
+        Array::from_vec(iterator.into_iter().collect())
     }
 }
 
@@ -178,6 +241,57 @@ impl<T: Copy, D: AsRef<[usize]>> ops::IndexMut<D> for Array<T> {
     }
 }
 
+impl<T: Copy + Zero> Array<T> {
+    pub fn zeros(n: usize) -> Array<T> {
+        let v = iter::repeat(Zero::zero()).take(n*n).collect::<Vec<T>>();
+        Array::new_with_shape(v, vec![n, n])
+    }
+}
+
+
+impl<T: Copy + One + Zero> Array<T> {
+    pub fn eye(n: usize) -> Array<T> {
+        let mut arr = Array::zeros(n);
+        for i in 0 .. n {
+            arr[[i,i]] = One::one();
+        }
+        arr
+    }
+}
+
+
+pub fn concatenate<T: Copy, A: AsRef<[Array<T>]>>(arrs: A, axis: usize) -> Array<T> {
+    let arrs = arrs.as_ref();
+    assert!(arrs.len() > 1, "concatenation at least 2 array");
+    assert!(arrs.iter().map(Array::shape)
+            .zip(arrs.iter().skip(1).map(Array::shape))
+            .all(|(as1, as2)| {
+                as1[.. axis] == as2[.. axis] && as1[axis+1 ..] == as2[axis+1 ..]
+            }),
+            "all the input array dimensions except for the concatenation axis must match exactly"
+            );
+    let mut shape = arrs[0].shape();
+    let dims = shape.len();
+
+    shape[axis] = arrs.iter().map(|a| a.shape()[axis]).sum();
+
+    let mut ret: Array<T> = Array::new(&shape);
+
+    let mut ix_offset = 0;
+    for arr in arrs.iter() {
+        let mut idx: Vec<usize> = iter::repeat(0).take(dims).collect();
+
+        for idx in arr.iter_indices() {
+            let mut new_idx = idx.clone();
+            new_idx[axis] += ix_offset;
+
+            *ret.get_mut(new_idx) = arr.get(idx);
+        }
+        ix_offset += arr.shape()[axis];
+    }
+
+    ret
+}
 
 // impl<T: Copy> ops::Index<(Range<usize>,)> for Array<T> {
 //     type Output = T;
@@ -291,9 +405,9 @@ impl<'a, T: Copy + fmt::Display> fmt::Display for RefArray<'a, T> {
 
 #[test]
 fn test_array() {
-    let mut v = Array::new(vec![ 0,  1,  2,  3,  4,  5,  6,  7,
-                                 8,  9, 10, 11, 12, 13, 14, 15,
-                                 16, 17, 18, 19, 20, 21, 22, 23]);
+    let mut v = Array::from_vec(vec![ 0,  1,  2,  3,  4,  5,  6,  7,
+                                      8,  9, 10, 11, 12, 13, 14, 15,
+                                      16, 17, 18, 19, 20, 21, 22, 23]);
 
     v.reshape([2, 3, 4]);
     assert_eq!(v.get([1, 1, 2]), 18);
@@ -317,4 +431,27 @@ fn test_array() {
     println!("SUB[1,2,3; 2,0] => \n{}", v3);
 
     println!("SUB => \n{}", v.slice(ix!(3.., [2,0])));
+}
+
+#[test]
+fn test_array_eye() {
+    println!("");
+    let i = Array::<f64>::eye(5);
+    println!("I => \n{}", i);
+}
+
+
+#[test]
+fn test_array_concat() {
+    let v1 = Array::new_with_shape(vec![0, 1,
+                                        2, 3], vec![2, 2]);
+
+    assert_eq!(v1.iter_indices().len(), 4);
+
+    let v2 = Array::new_with_shape(vec![8, 9, 10,
+                                        11, 9, 20], vec![2, 3]);
+
+    let res = concatenate([v1, v2], 1);
+
+    println!("Concat => \n{}", res);
 }
