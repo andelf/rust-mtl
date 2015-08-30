@@ -52,7 +52,6 @@ impl Iterator for ArrayIndexIter {
     }
 }
 
-
 impl ExactSizeIterator for ArrayIndexIter {
     fn len(&self) -> usize {
         self.size_hint().0
@@ -191,9 +190,10 @@ impl ArrayIx for [usize] {
     }
 }
 
+// i32 allows negative index
 impl ArrayIx for [i32] {
-    fn to_idx_vec(&self, _ax: usize, _dims: &[usize]) -> Vec<usize> {
-        self.iter().map(|&i| i as usize).collect()
+    fn to_idx_vec(&self, ax: usize, dims: &[usize]) -> Vec<usize> {
+        self.iter().map(|&i| if i < 0 { dims[ax] - (-i) as usize } else { i as usize }).collect()
     }
 }
 
@@ -207,16 +207,21 @@ impl ArrayIx for usize {
 
 impl ArrayIx for i32 {
     fn to_idx_vec(&self, ax: usize, dims: &[usize]) -> Vec<usize> {
-        assert!((*self as usize) < dims[ax], "ax must be in range");
-        vec![*self as usize]
+        let idx = if *self < 0 {
+            dims[ax] - (- *self) as usize
+        } else {
+            *self as usize
+        };
+        assert!(idx < dims[ax], "ax must be in range");
+        vec![idx]
     }
 }
 
 macro_rules! impl_array_ix_for_fixed_size_array {
     ($typ:ty, $size:expr) => (
         impl ArrayIx for [$typ; $size] {
-            fn to_idx_vec(&self, _ax: usize, _dims: &[usize]) -> Vec<usize> {
-                self.iter().map(|&i| i as usize).collect()
+            fn to_idx_vec(&self, ax: usize, dims: &[usize]) -> Vec<usize> {
+                self.as_ref().to_idx_vec(ax, dims)
             }
         }
     )

@@ -116,6 +116,13 @@ impl<'a, T: Copy> RefMutArray<'a, T> {
         let offset = self.offset_translate(index.as_ref());
         &mut self.arr.data[offset]
     }
+
+    pub fn move_from(&mut self, src: Array<T>) {
+        assert!(self.shape() == src.shape(), "move_from() must be called among arrays of same shape");
+        for ref idx in self.shape().iter_indices() {
+            *self.get_mut(idx) = src[idx];
+        }
+    }
 }
 
 
