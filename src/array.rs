@@ -191,10 +191,6 @@ impl_array_ix_for_fixed_size_array!(i32, 1);
 impl_array_ix_for_fixed_size_array!(i32, 2);
 impl_array_ix_for_fixed_size_array!(i32, 3);
 impl_array_ix_for_fixed_size_array!(i32, 4);
-impl_array_ix_for_fixed_size_array!(i32, 5);
-impl_array_ix_for_fixed_size_array!(i32, 6);
-impl_array_ix_for_fixed_size_array!(i32, 7);
-impl_array_ix_for_fixed_size_array!(i32, 8);
 
 #[test]
 fn test_index_ranges() {
@@ -336,6 +332,87 @@ impl<T: Copy + One + Zero> Array<T> {
         arr
     }
 }
+
+
+
+
+macro_rules! impl_binary_ops_for_array {
+    ($op:ident, $func:ident) => (
+        impl<T: ops::$op<T, Output=T> + Copy> ops::$op for Array<T> {
+            type Output = Array<T>;
+
+            fn $func(self, rhs: Array<T>) -> Array<T> {
+                assert!(self.shape() == rhs.shape());
+                let mut result = Array::new(self.shape());
+                for ref idx in self.iter_indices() {
+                    result[idx] = self[idx].$func(rhs[idx]);
+                }
+                result
+            }
+        }
+
+        // &M op M
+        impl<'a, T: ops::$op<T, Output=T> + Copy> ops::$op<Array<T>> for &'a Array<T> {
+            type Output = Array<T::Output>;
+
+            fn $func(self, rhs: Array<T>) -> Array<T::Output> {
+                self.$func(&rhs)
+            }
+        }
+
+        // // M op &M
+        impl<'a, T: ops::$op<T, Output=T> + Copy> ops::$op<&'a Array<T>> for Array<T> {
+            type Output = Array<T::Output>;
+
+            fn $func(self, rhs: &'a Array<T>) -> Array<T::Output> {
+                (&self).$func(rhs)
+            }
+        }
+        // &M op &M
+        impl<'a, 'b, T: ops::$op<T, Output=T> + Copy> ops::$op<&'a Array<T>> for &'b Array<T> {
+            type Output = Array<T::Output>;
+
+            fn $func(self, rhs: &'a Array<T>) -> Array<T::Output> {
+                assert!(self.shape() == rhs.shape());
+                let mut result = Array::new(self.shape());
+                for ref idx in self.iter_indices() {
+                    result[idx] = self[idx].$func(rhs[idx]);
+                }
+                result
+            }
+        }
+
+        // M + s
+        impl<T: ops::$op<T, Output=T> + Copy> ops::$op<T> for Array<T> {
+            type Output = Array<T::Output>;
+
+            fn $func(self, rhs: T) -> Array<T::Output> {
+                (&self).$func(rhs)
+            }
+        }
+
+        // &M + s
+        impl<'a, T: ops::$op<T, Output=T> + Copy> ops::$op<T> for &'a Array<T> {
+            type Output = Array<T::Output>;
+
+            fn $func(self, rhs: T) -> Array<T::Output> {
+                let mut result = Array::new(self.shape());
+                for ref idx in self.iter_indices() {
+                    result[idx] = self[idx].$func(rhs);
+                }
+                result
+            }
+        }
+
+    )
+}
+
+impl_binary_ops_for_array!(Add, add);
+impl_binary_ops_for_array!(Div, div);
+impl_binary_ops_for_array!(Rem, rem);
+impl_binary_ops_for_array!(Sub, sub);
+impl_binary_ops_for_array!(Mul, mul);
+
 
 
 pub fn concatenate<T: Copy, A: AsRef<[Array<T>]>>(arrs: A, axis: usize) -> Array<T> {
@@ -533,4 +610,15 @@ fn test_array_concat() {
 
     let res = concatenate([v1, v2], 1);
     println!("Concat => \n{}", res);
+}
+
+
+#[test]
+fn test_array_binary_op() {
+    let v1 = Array::<f64>::eye(4);
+    let v2 = Array::<f64>::ones(4);
+
+    println!("plus => \n{}", &v1 + &v2);
+    println!("mul => \n{}", (&v1 - 2.) * (&v2 + 3.));
+
 }
