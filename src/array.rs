@@ -6,6 +6,9 @@ use std::iter::FromIterator;
 
 use num::traits::{One, Zero};
 
+use rand::{thread_rng, Rng};
+
+#[derive(Clone, Debug)]
 pub struct ArrayIndexIter {
     current: Vec<usize>,
     shape: Vec<usize>
@@ -31,9 +34,15 @@ impl Iterator for ArrayIndexIter {
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
-        let sz = self.shape.iter()
-            .zip(self.current.iter())
-            .map(|(&sz, &i)| (sz - i -1) * sz).product();
+        let mut nth = 0;
+        for (i, &offs) in self.current.iter().enumerate().rev() {
+            if i + 1 < self.shape.len() {
+                nth += self.shape[i+1 .. ].iter().product::<usize>() * offs;
+            } else {
+                nth += offs
+            }
+        }
+        let sz = self.shape.nelem() - nth;
         (sz, Some(sz))
     }
 }
@@ -271,9 +280,9 @@ impl<T: Copy> Array<T> {
         &mut self.data[offset]
     }
 
-    pub fn reshape<D: AsRef<[usize]>>(&mut self, shape: D) {
-        assert_eq!(self.data.len(), shape.as_ref().iter().product());
-        self.shape = shape.as_ref().into()
+    pub fn reshape<S: ArrayShape>(&mut self, shape: S) {
+        assert_eq!(self.data.len(), shape.nelem());
+        self.shape = shape.to_shape_vec();
     }
 
     pub fn slice<'a>(&'a self, ix: Vec<Box<ArrayIx>>) -> RefArray<'a, T> {
@@ -281,6 +290,11 @@ impl<T: Copy> Array<T> {
             arr: self,
             open_mesh: ix
         }
+    }
+
+    pub fn shuffle(&mut self) {
+        let mut rng = thread_rng();
+        rng.shuffle(&mut self.data);
     }
 }
 
@@ -290,6 +304,7 @@ impl<A: Copy> FromIterator<A> for Array<A> {
     }
 }
 
+// arr[idx]
 impl<T: Copy, D: AsRef<[usize]>> ops::Index<D> for Array<T> {
     type Output = T;
 
@@ -299,6 +314,7 @@ impl<T: Copy, D: AsRef<[usize]>> ops::Index<D> for Array<T> {
     }
 }
 
+// arr[idx] = val
 impl<T: Copy, D: AsRef<[usize]>> ops::IndexMut<D> for Array<T> {
     #[inline]
     fn index_mut<'a>(&'a mut self, index: D) -> &'a mut T {
@@ -586,15 +602,26 @@ fn test_array() {
 
 #[test]
 fn test_array_eye_zeros_ones() {
-    println!("");
-    let i = Array::<f64>::eye(5);
-    println!("I => \n{}", i);
+    let arr = Array::<f64>::eye(3);
+    for i in 0 .. 3 {
+        for j in 0 .. 3 {
+            if i == j {
+                assert_eq!(arr[[i,j]], 1.);
+            } else {
+                assert_eq!(arr[[i,j]], 0.);
+            }
+        }
+    }
 
-    let i = Array::<f32>::zeros([3,4]);
-    println!("M(3x4) => \n{}", i);
+    let arr = Array::<f32>::zeros([3,4]);
+    for ref idx in arr.iter_indices() {
+        assert_eq!(arr[idx], 0.);
+    }
 
-    let i = Array::<f32>::ones([3,4]);
-    println!("M(3x4) => \n{}", i);
+    let arr = Array::<f32>::ones([3,4]);
+    for ref idx in arr.iter_indices() {
+        assert_eq!(arr[idx], 1.);
+    }
 }
 
 
@@ -604,12 +631,20 @@ fn test_array_concat() {
                                         2, 3], vec![2, 2]);
 
     assert_eq!(v1.iter_indices().len(), 4);
-
     let v2 = Array::new_with_shape(vec![8, 9, 10,
                                         11, 9, 20], vec![2, 3]);
 
+    assert_eq!(v2.iter_indices().len(), 6);
+    let mut it = v2.iter_indices();
+    assert!(it.next().is_some());
+    assert_eq!(it.len(), 5);
+
     let res = concatenate([v1, v2], 1);
-    println!("Concat => \n{}", res);
+    assert_eq!(res.shape(), vec![2, 5]);
+    assert_eq!(res[[1, 1]], 3);
+    assert_eq!(res[[0, 0]], 0);
+    assert_eq!(res[[1, 2]], 11);
+    assert_eq!(res[[0, 4]], 10);
 }
 
 
@@ -621,4 +656,13 @@ fn test_array_binary_op() {
     println!("plus => \n{}", &v1 + &v2);
     println!("mul => \n{}", (&v1 - 2.) * (&v2 + 3.));
 
+}
+
+#[test]
+fn test_array_shuffle() {
+    let mut arr = (0..12).collect::<Array<usize>>();
+    arr.reshape([3,4]);
+    let arr2 = arr.clone();
+    arr.shuffle();
+    assert!(arr != arr2, "shuffed array");
 }
