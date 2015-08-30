@@ -130,6 +130,7 @@ impl_array_shape_for_fixed_size_array!(usize, 3);
 // impl_array_shape_for_fixed_size_array!(i32, 1);
 
 
+
 // Array Index
 pub trait ArrayIx {
     fn to_idx_vec(&self, ax: usize, dims: &[usize]) -> Vec<usize>;
@@ -191,6 +192,20 @@ impl ArrayIx for [i32] {
 }
 
 
+impl ArrayIx for usize {
+    fn to_idx_vec(&self, ax: usize, dims: &[usize]) -> Vec<usize> {
+        assert!(*self < dims[ax], "ax must be in range");
+        vec![*self]
+    }
+}
+
+impl ArrayIx for i32 {
+    fn to_idx_vec(&self, ax: usize, dims: &[usize]) -> Vec<usize> {
+        assert!((*self as usize) < dims[ax], "ax must be in range");
+        vec![*self as usize]
+    }
+}
+
 macro_rules! impl_array_ix_for_fixed_size_array {
     ($typ:ty, $size:expr) => (
         impl ArrayIx for [$typ; $size] {
@@ -205,6 +220,12 @@ impl_array_ix_for_fixed_size_array!(i32, 1);
 impl_array_ix_for_fixed_size_array!(i32, 2);
 impl_array_ix_for_fixed_size_array!(i32, 3);
 impl_array_ix_for_fixed_size_array!(i32, 4);
+
+macro_rules! ix {
+    ($($arg:expr),*) => (
+        vec![$( Box::new($arg) as Box<ArrayIx> ),*]
+    )
+}
 
 #[test]
 fn test_index_ranges() {
@@ -283,9 +304,10 @@ impl<T: Copy> Array<T> {
         &mut self.data[offset]
     }
 
-    pub fn reshape<S: ArrayShape>(&mut self, shape: S) {
+    pub fn reshape<S: ArrayShape>(mut self, shape: S) -> Array<T> {
         assert_eq!(self.data.len(), shape.nelem());
         self.shape = shape.to_shape_vec();
+        self
     }
 
     pub fn shuffle(&mut self) {
@@ -501,19 +523,13 @@ impl<T: Copy + fmt::Display> fmt::Display for Array<T> {
     }
 }
 
-macro_rules! ix {
-    ($($arg:expr),*) => (
-        vec![$( Box::new($arg) as Box<ArrayIx> ),*]
-    )
-}
 
 #[test]
 fn test_array() {
     let mut v = Array::from_vec(vec![ 0,  1,  2,  3,  4,  5,  6,  7,
                                       8,  9, 10, 11, 12, 13, 14, 15,
-                                      16, 17, 18, 19, 20, 21, 22, 23]);
+                                      16, 17, 18, 19, 20, 21, 22, 23]).reshape([2, 3, 4]);
 
-    v.reshape([2, 3, 4]);
     assert_eq!(v.get([1, 1, 2]), 18);
 
     v[[1,2,3]] = 100;
@@ -525,7 +541,7 @@ fn test_array() {
     println!("DEBUG print => \n{}", v);
     println!("DEBUG print => \n{:?}", s);
 
-    v.reshape([6, 4]);
+    let v = v.reshape([6, 4]);
     println!("DEBUG print => \n{}", v);
 
     let v2 = ix!([1, 2, 3], [2, 0]);
@@ -597,8 +613,7 @@ fn test_array_binary_op() {
 
 #[test]
 fn test_array_shuffle() {
-    let mut arr = (0..12).collect::<Array<usize>>();
-    arr.reshape([3,4]);
+    let mut arr = (0..12).collect::<Array<usize>>().reshape([3,4]);
     let arr2 = arr.clone();
     arr.shuffle();
     assert!(arr != arr2, "shuffed array");

@@ -16,6 +16,15 @@ use num::traits::{One, Zero};
 
 pub mod array;
 
+
+#[macro_export]
+macro_rules! ix {
+    ($($arg:expr),*) => (
+        vec![$( Box::new($arg) as Box<::mtl::array::ArrayIx> ),*]
+    )
+}
+
+
 use self::view::{MatrixSubView, MatrixMutSubView};
 
 pub mod view;
