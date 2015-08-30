@@ -5,7 +5,6 @@ use std::iter;
 use std::iter::FromIterator;
 
 use num::traits::{One, Zero};
-
 use rand::{thread_rng, Rng};
 
 #[derive(Clone, Debug)]
