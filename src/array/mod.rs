@@ -68,6 +68,12 @@ pub trait ArrayShape {
     fn nelem(&self) -> usize {
         self.to_shape_vec().iter().product()
     }
+    fn iter_indices(&self) -> ArrayIndexIter {
+        ArrayIndexIter {
+            current: iter::repeat(0).take(self.ndim()).collect(),
+            shape: self.to_shape_vec()
+        }
+    }
 }
 
 impl<'a, S: ArrayShape + ?Sized> ArrayShape for &'a S {
@@ -368,7 +374,28 @@ impl<T: Copy + One + Zero> Array<T> {
 }
 
 
+// use PartialOrd, this returen unravel_index
+impl<T: Copy + PartialOrd> Array<T> {
+    pub fn argmax(&self) -> usize {
+        let mut maxi = 0;
+        for i in 0 .. self.shape().nelem() {
+            if self.data[maxi] < self.data[i] {
+                maxi = i;
+            }
+        }
+        maxi
+    }
 
+    pub fn argmin(&self) -> usize {
+        let mut mini = 0;
+        for i in 0 .. self.shape().nelem() {
+            if self.data[mini] > self.data[i] {
+                mini = i;
+            }
+        }
+        mini
+    }
+}
 
 macro_rules! impl_binary_ops_for_array {
     ($op:ident, $func:ident) => (

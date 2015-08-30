@@ -3,6 +3,7 @@ use std::fmt;
 
 use super::Array;
 use super::ArrayIx;
+use super::ArrayShape;
 
 // RefArray
 pub struct RefArray<'a, T: 'a> {
@@ -39,6 +40,15 @@ impl<'a, T: Copy> RefArray<'a, T> {
     //     let offset = self.offset_of(index.as_ref());
     //     &mut self.data[offset]
     // }
+
+    pub fn to_array(&self) -> Array<T> {
+        let mut ret = Array::new(self.shape());
+        for ref idx in self.shape().iter_indices() {
+            ret[idx] = self.get(idx)
+        }
+        ret
+    }
+
 }
 
 impl<'a, T: Copy + fmt::Display> fmt::Display for RefArray<'a, T> {
