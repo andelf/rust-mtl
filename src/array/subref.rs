@@ -12,7 +12,7 @@ pub struct RefArray<'a, T: 'a> {
 }
 
 impl<'a, T: Copy> RefArray<'a, T> {
-    pub fn new<'b>(arr: &'b Array<T>, open_mesh: Vec<Box<ArrayIx + 'b>>) -> RefArray<'b, T> {
+    fn new<'b>(arr: &'b Array<T>, open_mesh: Vec<Box<ArrayIx + 'b>>) -> RefArray<'b, T> {
         RefArray {
             arr: arr,
             open_mesh: open_mesh
@@ -67,5 +67,54 @@ impl<'a, T: Copy + fmt::Display> fmt::Display for RefArray<'a, T> {
         let ret = dump_ref_array_data(self, &dims, ndim, &vec![]);
         // FIXME: adding line break's buggy format
         write!(f, "{}", ret.replace("],", "],\n"))
+    }
+}
+
+
+// RefArray
+pub struct RefMutArray<'a, T: 'a> {
+    arr: &'a mut Array<T>,
+    // simulation of np.ix_ function?
+    open_mesh: Vec<Box<ArrayIx + 'a>>
+}
+
+impl<'a, T: Copy> RefMutArray<'a, T> {
+    fn new<'b>(arr: &'b mut Array<T>, open_mesh: Vec<Box<ArrayIx + 'b>>) -> RefMutArray<'b, T> {
+        RefMutArray {
+            arr: arr,
+            open_mesh: open_mesh
+        }
+    }
+
+    pub fn shape(&self) -> Vec<usize> {
+        self.open_mesh.iter().enumerate().map(|(i,v)| (*v).size(i, &self.arr.shape())).collect()
+    }
+
+    fn offset_translate(&self, index: &[usize]) -> usize {
+        let mut ix = Vec::<usize>::new();
+        for (i, &k) in index.iter().enumerate() {
+            ix.push(self.open_mesh[i].to_idx_vec(i, &self.arr.shape())[k]);
+        }
+        self.arr.offset_of(&ix)
+    }
+
+    pub fn get<D: AsRef<[usize]>>(&self, index: D) -> T {
+        self.arr.data[self.offset_translate(index.as_ref())]
+    }
+
+    pub fn get_mut<D: AsRef<[usize]>>(&mut self, index: D) -> &mut T {
+        let offset = self.offset_translate(index.as_ref());
+        &mut self.arr.data[offset]
+    }
+}
+
+
+impl<T: Copy> Array<T> {
+    pub fn slice<'a>(&'a self, ix: Vec<Box<ArrayIx>>) -> RefArray<'a, T> {
+        RefArray::new(self, ix)
+    }
+
+    pub fn slice_mut<'a>(&'a mut self, ix: Vec<Box<ArrayIx>>) -> RefMutArray<'a, T> {
+        RefMutArray::new(self, ix)
     }
 }

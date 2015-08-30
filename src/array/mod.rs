@@ -11,6 +11,7 @@ use rand::{thread_rng, Rng};
 mod subref;
 
 pub use self::subref::RefArray;
+pub use self::subref::RefMutArray;
 
 #[derive(Clone, Debug)]
 pub struct ArrayIndexIter {
@@ -285,10 +286,6 @@ impl<T: Copy> Array<T> {
     pub fn reshape<S: ArrayShape>(&mut self, shape: S) {
         assert_eq!(self.data.len(), shape.nelem());
         self.shape = shape.to_shape_vec();
-    }
-
-    pub fn slice<'a>(&'a self, ix: Vec<Box<ArrayIx>>) -> RefArray<'a, T> {
-        RefArray::new(self, ix)
     }
 
     pub fn shuffle(&mut self) {
