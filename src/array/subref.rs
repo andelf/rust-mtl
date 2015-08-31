@@ -2,6 +2,7 @@ use std::iter;
 use std::fmt;
 
 use super::Array;
+use super::ArrayType;
 use super::ArrayIx;
 use super::ArrayShape;
 

@@ -249,11 +249,43 @@ fn test_index_ranges() {
 }
 
 
+
+pub trait ArrayType<T> {
+    fn shape(&self) -> Vec<usize>;
+    fn get<D: AsRef<[usize]>>(&self, index: D) -> T;
+    fn get_ref<D: AsRef<[usize]>>(&self, index: D) -> &T;
+
+    fn iter_indices(&self) -> ArrayIndexIter {
+        let shape = self.shape();
+        let start_idx = iter::repeat(0).take(shape.len()).collect();
+        ArrayIndexIter {
+            current: start_idx,
+            shape: shape
+        }
+    }
+}
+
+
 // nd Array
 #[derive(Clone, PartialEq, Debug)]
 pub struct Array<T> {
     data: Vec<T>,
     shape: Vec<usize>
+}
+
+
+impl<T: Copy> ArrayType<T> for Array<T> {
+    fn shape(&self) -> Vec<usize> {
+        self.shape.clone()
+    }
+
+    fn get<D: AsRef<[usize]>>(&self, index: D) -> T {
+        self.data[self.offset_of(index.as_ref())]
+    }
+
+    fn get_ref<D: AsRef<[usize]>>(&self, index: D) -> &T {
+        &self.data[self.offset_of(index.as_ref())]
+    }
 }
 
 impl<T: Copy> Array<T> {
@@ -264,15 +296,6 @@ impl<T: Copy> Array<T> {
         unsafe { v.set_len(nelem) };
         Array {
             data: v,
-            shape: shape
-        }
-    }
-
-    pub fn iter_indices(&self) -> ArrayIndexIter {
-        let shape = self.shape();
-        let start_idx = iter::repeat(0).take(shape.len()).collect();
-        ArrayIndexIter {
-            current: start_idx,
             shape: shape
         }
     }
@@ -293,10 +316,6 @@ impl<T: Copy> Array<T> {
         }
     }
 
-    pub fn shape(&self) -> Vec<usize> {
-        self.shape.clone()
-    }
-
     fn offset_of(&self, index: &[usize]) -> usize {
         index.iter().enumerate()
             .map(|(i, &ax)| {
@@ -304,10 +323,6 @@ impl<T: Copy> Array<T> {
                 self.shape.iter().skip(i+1).product::<usize>() * ax
             })
             .sum()
-    }
-
-    pub fn get<D: AsRef<[usize]>>(&self, index: D) -> T {
-        self.data[self.offset_of(index.as_ref())]
     }
 
     pub fn get_mut<D: AsRef<[usize]>>(&mut self, index: D) -> &mut T {
