@@ -340,6 +340,24 @@ impl<T: Copy> Array<T> {
         let mut rng = thread_rng();
         rng.shuffle(&mut self.data);
     }
+
+    pub fn all<F>(&mut self, mut f: F) -> bool where Self: Sized, F: FnMut(T) -> bool {
+        for &x in self.data.iter() {
+            if !f(x) {
+                return false;
+            }
+        }
+        true
+    }
+
+    pub fn any<F>(&mut self, mut f: F) -> bool where Self: Sized, F: FnMut(T) -> bool {
+        for &x in self.data.iter() {
+            if f(x) {
+                return true;
+            }
+        }
+        false
+    }
 }
 
 impl<A: Copy> FromIterator<A> for Array<A> {
@@ -664,4 +682,13 @@ fn test_array_shuffle() {
     let arr2 = arr.clone();
     arr.shuffle();
     assert!(arr != arr2, "shuffed array");
+}
+
+
+
+#[test]
+fn test_test_any_all() {
+    let mut arr = (0..12).collect::<Array<usize>>().reshape([3,4]);
+    assert!(arr.any(|i| i >= 10));
+    assert!(arr.any(|i| i <= 13));
 }
