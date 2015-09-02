@@ -255,6 +255,10 @@ pub trait ArrayType<T> {
     fn get<D: AsRef<[usize]>>(&self, index: D) -> T;
     fn get_ref<D: AsRef<[usize]>>(&self, index: D) -> &T;
 
+    fn size(&self) -> usize {
+        self.shape().nelem()
+    }
+
     fn iter_indices(&self) -> ArrayIndexIter {
         let shape = self.shape();
         let start_idx = iter::repeat(0).take(shape.len()).collect();
@@ -334,6 +338,10 @@ impl<T: Copy> Array<T> {
         assert_eq!(self.data.len(), shape.nelem());
         self.shape = shape.to_shape_vec();
         self
+    }
+
+    pub fn flatten(&mut self) {
+        self.shape = vec![self.shape.nelem()];
     }
 
     pub fn shuffle(&mut self) {
@@ -691,4 +699,11 @@ fn test_test_any_all() {
     let mut arr = (0..12).collect::<Array<usize>>().reshape([3,4]);
     assert!(arr.any(|i| i >= 10));
     assert!(arr.any(|i| i <= 13));
+}
+
+#[test]
+fn test_flatten() {
+    let mut arr = (0..12).collect::<Array<i32>>().reshape([3,4]);
+    arr.flatten();
+    assert!(arr.shape() == vec![12]);
 }
