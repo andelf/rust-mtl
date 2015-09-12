@@ -443,6 +443,7 @@ impl<T: Copy + PartialOrd> Array<T> {
 
 macro_rules! impl_binary_ops_for_array {
     ($op:ident, $func:ident) => (
+        // M op M
         impl<T: ops::$op<T, Output=T> + Copy> ops::$op for Array<T> {
             type Output = Array<T>;
 
@@ -465,7 +466,7 @@ macro_rules! impl_binary_ops_for_array {
             }
         }
 
-        // // M op &M
+        // M op &M
         impl<'a, T: ops::$op<T, Output=T> + Copy> ops::$op<&'a Array<T>> for Array<T> {
             type Output = Array<T::Output>;
 
@@ -473,6 +474,7 @@ macro_rules! impl_binary_ops_for_array {
                 (&self).$func(rhs)
             }
         }
+
         // &M op &M
         impl<'a, 'b, T: ops::$op<T, Output=T> + Copy> ops::$op<&'a Array<T>> for &'b Array<T> {
             type Output = Array<T::Output>;
@@ -509,6 +511,81 @@ macro_rules! impl_binary_ops_for_array {
             }
         }
 
+        // &A op slice
+        impl<'a, 'b, T: ops::$op<T, Output=T> + Copy> ops::$op<RefArray<'b, T>> for &'a Array<T> {
+            type Output = Array<T::Output>;
+
+            fn $func(self, rhs: RefArray<'b, T>) -> Array<T::Output> {
+                assert!(self.shape() == rhs.shape());
+                let mut result = Array::new(self.shape());
+                for ref idx in self.iter_indices() {
+                    result[idx] = self[idx].$func(rhs[idx]);
+                }
+                result
+            }
+        }
+
+        // A op slice
+        impl<'b, T: ops::$op<T, Output=T> + Copy> ops::$op<RefArray<'b, T>> for Array<T> {
+            type Output = Array<T::Output>;
+
+            fn $func(self, rhs: RefArray<'b, T>) -> Array<T::Output> {
+                (&self).$func(rhs)
+            }
+        }
+
+        // slice + s
+        impl<'a, T: ops::$op<T, Output=T> + Copy> ops::$op<T> for RefArray<'a, T> {
+            type Output = Array<T::Output>;
+
+            fn $func(self, rhs: T) -> Array<T::Output> {
+                let mut result = Array::new(self.shape());
+                for ref idx in self.iter_indices() {
+                    result[idx] = self[idx].$func(rhs);
+                }
+                result
+            }
+        }
+
+        // slice + A
+        impl<'a, T: ops::$op<T, Output=T> + Copy> ops::$op<Array<T>> for RefArray<'a, T> {
+            type Output = Array<T::Output>;
+
+            fn $func(self, rhs: Array<T>) -> Array<T::Output> {
+                let mut result = Array::new(self.shape());
+                for ref idx in self.iter_indices() {
+                    result[idx] = self[idx].$func(rhs[idx]);
+                }
+                result
+            }
+        }
+
+        // slice + A
+        impl<'a, 'b, T: ops::$op<T, Output=T> + Copy> ops::$op<&'b Array<T>> for RefArray<'a, T> {
+            type Output = Array<T::Output>;
+
+            fn $func(self, rhs: &'b Array<T>) -> Array<T::Output> {
+                let mut result = Array::new(self.shape());
+                for ref idx in self.iter_indices() {
+                    result[idx] = self[idx].$func(rhs[idx]);
+                }
+                result
+            }
+        }
+
+        // slice op slice
+        impl<'a, 'b, T: ops::$op<T, Output=T> + Copy> ops::$op<RefArray<'b, T>> for RefArray<'a, T> {
+            type Output = Array<T>;
+
+            fn $func(self, rhs: RefArray<'b, T>) -> Array<T> {
+                assert!(self.shape() == rhs.shape());
+                let mut result = Array::new(self.shape());
+                for ref idx in self.iter_indices() {
+                    result[idx] = self[idx].$func(rhs[idx]);
+                }
+                result
+            }
+        }
     )
 }
 

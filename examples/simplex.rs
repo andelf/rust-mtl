@@ -30,17 +30,17 @@ fn main() {
     // fixme: to_array :(
     let mut col = M.slice(ix![3, ..]).to_array().argmax();
 
-    let mut row = (M.slice(ix![..3, -1]).to_array() / M.slice(ix![..3, col]).to_array()).argmin();
+    let mut row = (M.slice(ix![..3, -1]) / M.slice(ix![..3, col])).argmin();
 
     println!("pivot M[{},{}] = {}", row, col, M[[row,col]]);
 
     // round 1
-    let temp_row = M.slice(ix![row, ..]).to_array() / M[[row,col]];
+    let temp_row = M.slice(ix![row, ..]) / M[[row,col]];
     M.slice_mut(ix![row, ..]).move_from(temp_row);
 
     for r in 0 .. 4 {
         if r != row {
-            let temp_row = M.slice(ix![r,..]).to_array() - M.slice(ix![row,..]).to_array() * M[[r,col]];
+            let temp_row = M.slice(ix![r,..]) - M.slice(ix![row,..]) * M[[r,col]];
             M.slice_mut(ix![r, ..]).move_from(temp_row);
         }
     }
@@ -48,16 +48,16 @@ fn main() {
     println!("M => \n{}", M);
 
     col = 0;
-    row = (M.slice(ix![..3,-1]).to_array() / M.slice(ix![..3,col]).to_array()).argmin();
+    row = (M.slice(ix![..3,-1]) / M.slice(ix![..3,col])).argmin();
 
     println!("pivot M[{},{}] = {}", row, col, M[[row,col]]);
 
     // round 2
-    let temp_row = M.slice(ix![row, ..]).to_array() / M[[row,col]];
+    let temp_row = M.slice(ix![row, ..]) / M[[row,col]];
     M.slice_mut(ix![row, ..]).move_from(temp_row);
     for r in 0 .. 4 {
         if r != row {
-            let temp_row = M.slice(ix![r,..]).to_array() - M.slice(ix![row,..]).to_array() * M[[r,col]];
+            let temp_row = M.slice(ix![r,..]) - M.slice(ix![row,..]) * M[[r,col]];
             M.slice_mut(ix![r, ..]).move_from(temp_row);
         }
     }

@@ -142,8 +142,6 @@ impl<'a, T: Copy> ArrayType<T> for RefMutArray<'a, T> {
     }
 }
 
-
-
 impl<'a, T: Copy, D: AsRef<[usize]>> ops::Index<D> for RefMutArray<'a, T> {
     type Output = T;
 
