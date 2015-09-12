@@ -617,7 +617,7 @@ fn test_array() {
 
     let v2 = ix!([1, 2, 3], [2, 0]);
     let v3 = v.slice(v2);
-    println!("debug => {:?}", v3.get([0,0]));
+    println!("debug => {:?}", v3[[0,0]]);
 
     println!("SUB[1,2,3; 2,0] => \n{}", v3);
 
