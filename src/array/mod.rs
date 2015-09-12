@@ -252,8 +252,8 @@ fn test_index_ranges() {
 
 pub trait ArrayType<T> {
     fn shape(&self) -> Vec<usize>;
-    fn get<D: AsRef<[usize]>>(&self, index: D) -> T;
     fn get_ref<D: AsRef<[usize]>>(&self, index: D) -> &T;
+    fn get_mut<D: AsRef<[usize]>>(&mut self, index: D) -> &mut T;
 
     fn size(&self) -> usize {
         self.shape().nelem()
@@ -268,8 +268,6 @@ pub trait ArrayType<T> {
         }
     }
 }
-
-
 // nd Array
 #[derive(Clone, PartialEq, Debug)]
 pub struct Array<T> {
@@ -283,12 +281,13 @@ impl<T: Copy> ArrayType<T> for Array<T> {
         self.shape.clone()
     }
 
-    fn get<D: AsRef<[usize]>>(&self, index: D) -> T {
-        self.data[self.offset_of(index.as_ref())]
-    }
-
     fn get_ref<D: AsRef<[usize]>>(&self, index: D) -> &T {
         &self.data[self.offset_of(index.as_ref())]
+    }
+
+    fn get_mut<D: AsRef<[usize]>>(&mut self, index: D) -> &mut T {
+        let idx = self.offset_of(index.as_ref());
+        &mut self.data[idx]
     }
 }
 
@@ -380,7 +379,7 @@ impl<T: Copy, D: AsRef<[usize]>> ops::Index<D> for Array<T> {
 
     #[inline]
     fn index<'a>(&'a self, index: D) -> &'a T {
-        &self.data[self.offset_of(index.as_ref())]
+        self.get_ref(index)
     }
 }
 
@@ -388,8 +387,7 @@ impl<T: Copy, D: AsRef<[usize]>> ops::Index<D> for Array<T> {
 impl<T: Copy, D: AsRef<[usize]>> ops::IndexMut<D> for Array<T> {
     #[inline]
     fn index_mut<'a>(&'a mut self, index: D) -> &'a mut T {
-        let offset = self.offset_of(index.as_ref());
-        &mut self.data[offset]
+        self.get_mut(index)
     }
 }
 
@@ -543,7 +541,7 @@ pub fn concatenate<T: Copy, A: AsRef<[Array<T>]>>(arrs: A, axis: usize) -> Array
             let mut new_idx = idx.clone();
             new_idx[axis] += ix_offset;
 
-            *ret.get_mut(new_idx) = arr.get(idx);
+            *ret.get_mut(new_idx) = arr[idx];
         }
         ix_offset += arr.shape()[axis];
     }
@@ -603,7 +601,7 @@ fn test_array() {
                                       8,  9, 10, 11, 12, 13, 14, 15,
                                       16, 17, 18, 19, 20, 21, 22, 23]).reshape([2, 3, 4]);
 
-    assert_eq!(v.get([1, 1, 2]), 18);
+    assert_eq!(v[[1, 1, 2]], 18);
 
     v[[1,2,3]] = 100;
     println!("fuck {:?}", v[[1,1,2]]);
