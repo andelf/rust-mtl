@@ -1,10 +1,7 @@
 #[macro_use]
 extern crate mtl;
 
-use mtl::array::Array;
-
-use mtl::array::concatenate;
-
+use mtl::array::{Array, ToArray, concatenate};
 
 /*
 maximize:  13 * A + 23 * B
@@ -22,6 +19,8 @@ fn main() {
     let b = Array::from_vec(vec![480.0, 160.0, 1190.0]).reshape([3,1]);
     let c = Array::from_vec(vec![13.0, 23.0]).reshape([1,2]);
 
+    // [[ A I b ]
+    //  [ c 0 0 ]]
     let mut M = concatenate([concatenate([A, Array::eye(3),    b], 1),
                              concatenate([c, Array::zeros([1,4])], 1)], 0);
 

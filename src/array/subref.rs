@@ -2,10 +2,8 @@ use std::iter;
 use std::fmt;
 use std::ops;
 
-use super::Array;
-use super::ArrayType;
-use super::ArrayIx;
-use super::ArrayShape;
+use super::{Array, ArrayType, ArrayIx, ArrayShape, ToArray};
+
 
 // RefArray
 pub struct RefArray<'a, T: 'a> {
@@ -29,15 +27,16 @@ impl<'a, T: Copy> RefArray<'a, T> {
         }
         self.arr.offset_of(&ix)
     }
+}
 
-    pub fn to_array(&self) -> Array<T> {
+impl<'a, T: Copy> ToArray<T> for RefArray<'a, T> {
+    fn to_array(&self) -> Array<T> {
         let mut ret = Array::new(self.shape());
         for ref idx in self.shape().iter_indices() {
             ret[idx] = self[idx];
         }
         ret
     }
-
 }
 
 impl<'a, T: Copy> ArrayType<T> for RefArray<'a, T> {

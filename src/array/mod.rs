@@ -268,13 +268,12 @@ pub trait ArrayType<T> {
         }
     }
 }
-// nd Array
+/// n-d Array
 #[derive(Clone, PartialEq, Debug)]
 pub struct Array<T> {
     data: Vec<T>,
     shape: Vec<usize>
 }
-
 
 impl<T: Copy> ArrayType<T> for Array<T> {
     fn shape(&self) -> Vec<usize> {
@@ -671,6 +670,34 @@ impl<T: Copy + fmt::Display> fmt::Display for Array<T> {
     }
 }
 
+pub trait ToArray<T> {
+    fn to_array(&self) -> Array<T>;
+}
+
+impl<T: Copy> ToArray<T> for Vec<T> {
+    fn to_array(&self) -> Array<T> {
+        Array::from_vec(self.clone()).reshape([self.len()])
+    }
+}
+
+impl<T: Copy> ToArray<T> for [T] {
+    fn to_array(&self) -> Array<T> {
+        Array::from_vec(self.to_vec()).reshape([self.len()])
+    }
+}
+
+// multi-dimension ToArray support
+// FIXME: avoid clone() too much
+// impl<I: fmt::Debug, T: ToArray<I>> ToArray<I> for Vec<T> {
+//     fn to_array(&self) -> Array<I> {
+//         // add dimension
+//         let mut shape = self[0].to_array().shape();
+//         shape.insert(0, self.len());
+//         let t: Vec<I> = self.iter().map(|row| row.to_array()).flat_map(|arr| arr.data);
+//         println!("flatten => {:?}", t);
+//         Array::from_vec(t).reshape(shape)
+//     }
+// }
 
 #[test]
 fn test_array() {
@@ -781,4 +808,11 @@ fn test_flatten() {
     let mut arr = (0..12).collect::<Array<i32>>().reshape([3,4]);
     arr.flatten();
     assert!(arr.shape() == vec![12]);
+}
+
+#[test]
+fn test_to_array_trait() {
+    let v = vec![2, 3, 4, 5];
+    let arr: Array<i32> = v.to_array();
+    assert!(arr.shape() == vec![4], "ToArray should perserve shape");
 }
