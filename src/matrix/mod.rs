@@ -5,19 +5,11 @@ use std::str::FromStr;
 use num::traits::{One, Zero};
 
 
-
-
-#[macro_export]
-macro_rules! ix {
-    ($($arg:expr),*) => (
-        vec![$( Box::new($arg) as Box<::mtl::array::ArrayIx> ),*]
-    )
-}
-
-
 use self::view::{MatrixSubView, MatrixMutSubView};
 
 pub mod view;
+
+pub mod sparse;
 
 // TODO: fit this into Matrix definition
 pub trait MatrixStorage<T> {

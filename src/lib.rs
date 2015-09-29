@@ -16,6 +16,4 @@ macro_rules! ix {
 }
 
 pub mod array;
-
-
 pub mod matrix;
