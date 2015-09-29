@@ -2,6 +2,7 @@
 
 use std::iter;
 use std::fmt;
+use std::usize;
 
 use num::traits::Zero;
 
@@ -110,8 +111,6 @@ impl<T: Copy + Zero> SparseYale<T> {
 
         let mut vals_insert_pos = col_start_idx;
         for i in col_start_idx .. col_end_idx {
-            println!("fuck");
-
             if self.row_pos[i] == row {
                 self.vals[i] = it;
                 return;
@@ -128,7 +127,38 @@ impl<T: Copy + Zero> SparseYale<T> {
             }
         }
         self.row_pos.insert(vals_insert_pos, row);
+    }
 
+    pub fn remove(&mut self, index: (usize, usize)) {
+        let (row, col) = index;
+        assert!(row < self.nrow());
+        assert!(col < self.ncol());
+
+        let col_start_idx = self.col_starts[col];
+        let col_end_idx = if col == self.ncol() - 1 {
+            self.vals.len()
+        } else {
+            self.col_starts[col+1]
+        };
+
+        let mut vals_remove_pos = usize::MAX;
+        for i in col_start_idx .. col_end_idx {
+            if self.row_pos[i] == row {
+                vals_remove_pos = i;
+                break;
+            }
+        }
+
+        if vals_remove_pos == usize::MAX {
+            return;
+        }
+        self.vals.remove(vals_remove_pos);
+        self.row_pos.remove(vals_remove_pos);
+        for i in self.col_starts.iter_mut() {
+            if *i > vals_remove_pos {
+                *i -= 1;
+            }
+        }
     }
 }
 
@@ -192,7 +222,11 @@ fn test_sparse_matrix_build() {
     m.insert((2,3), 22);
     m.insert((5,3), 233);
     m.insert((2,2), -3);
+
     println!("got mat =>{}", m);
     println!("debug mat=>{:?}", m);
-
+    m.remove((2,2));
+    println!("remove");
+    println!("got mat =>{}", m);
+    println!("debug mat=>{:?}", m);
 }
