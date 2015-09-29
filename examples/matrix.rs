@@ -1,6 +1,6 @@
 extern crate mtl;
 
-use mtl::Matrix;
+use mtl::matrix::Matrix;
 use std::str::FromStr;
 use std::mem;
 

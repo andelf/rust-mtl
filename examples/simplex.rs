@@ -13,8 +13,9 @@ sbject to:
 
 #[allow(non_snake_case)]
 fn main() {
-    let A = Array::from_vec(vec![5.0, 15.0, 4.0,
-                                 4.0, 35.0, 20.0]).reshape([3, 2]);
+    let A = Array::from_vec(vec![5.0, 15.0,
+                                 4.0, 4.0,
+                                 35.0, 20.0]).reshape([3, 2]);
 
     let b = Array::from_vec(vec![480.0, 160.0, 1190.0]).reshape([3,1]);
     let c = Array::from_vec(vec![13.0, 23.0]).reshape([1,2]);
