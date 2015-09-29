@@ -3,6 +3,7 @@
 use std::iter;
 use std::fmt;
 use std::usize;
+use std::ops;
 
 use num::traits::Zero;
 
@@ -27,22 +28,21 @@ impl<T: Copy + Zero> SparseYale<T> {
         }
     }
 
-    pub fn from_vec(vec: Vec<Vec<T>>) -> SparseYale<T> {
+    pub fn from_vec(vec: Vec<Vec<T>>) -> Self {
         let nrow = vec.len();
         let ncol = vec[0].len();
 
-        let data = vec.into_iter().flat_map(|v| v.into_iter()).collect::<Vec<T>>();
-        // // let mut data = Vec::with_capacity(nrow * ncol);
-        // // for row in vec {
-        // //     for item in row {
-        // //         data.push(item);
-        // //     }
-        // // }
-        // Matrix {
-        //     data: data,
-        //     dim: (nrow, ncol),
-        // }
-        unimplemented!()
+        let mut mat = SparseYale::zeros(nrow, ncol);
+        for (i, row) in vec.into_iter().enumerate() {
+            for (j, item) in row.into_iter().enumerate() {
+                mat.insert((i,j), item);
+            }
+        }
+        mat
+    }
+
+    pub fn shape(&self) -> (usize, usize) {
+        self.dim
     }
 
     #[inline]
@@ -152,8 +152,8 @@ impl<T: Copy + Zero> SparseYale<T> {
         if vals_remove_pos == usize::MAX {
             return;
         }
-        self.vals.remove(vals_remove_pos);
-        self.row_pos.remove(vals_remove_pos);
+        let _ = self.vals.remove(vals_remove_pos);
+        let _ = self.row_pos.remove(vals_remove_pos);
         for i in self.col_starts.iter_mut() {
             if *i > vals_remove_pos {
                 *i -= 1;
@@ -161,6 +161,24 @@ impl<T: Copy + Zero> SparseYale<T> {
         }
     }
 }
+
+// index by tuple: slower
+impl<T: Zero + Copy> ops::Index<(usize, usize)> for SparseYale<T> {
+    type Output = T;
+
+    #[inline]
+    fn index(&self, (row, col): (usize, usize)) -> &T {
+        self.get((row,col)).unwrap()
+    }
+}
+
+impl<T: Zero + Copy> ops::IndexMut<(usize, usize)> for SparseYale<T> {
+    #[inline]
+    fn index_mut(&mut self, (row, col): (usize, usize)) -> &mut T {
+        self.get_mut((row,col)).unwrap()
+    }
+}
+
 
 impl<T: Copy + Zero + fmt::Debug> fmt::Debug for SparseYale<T> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -208,25 +226,36 @@ fn test_sparse_yale() {
         zero: 0,
     };
 
-    m.get_mut((3,0)).map(|i| *i = 233);
+    let _ = m.get_mut((3,0)).map(|i| { *i = 233; });
     println!("got mat =>\n{}", m);
 }
+
+#[test]
+fn test_sparse_matrix_from_vec() {
+    let mat = SparseYale::from_vec(
+        vec![vec![12, 23, 43, 0, 0, 0],
+             vec![0,  40, 0,  0, 1, 0],
+             vec![0,  0,  0,  0, 0, 2]]);
+
+    assert_eq!(mat.shape(), (3,6));
+    assert_eq!(mat.get((1,1)), Some(&40));
+    assert_eq!(mat.get((2,3)), Some(&0));
+}
+
 
 
 #[test]
 fn test_sparse_matrix_build() {
     let mut m: SparseYale<i32> = SparseYale::zeros(10, 4);
-    println!("got mat =>{}", m);
     m.insert((1,1), 23);
-    //m.insert((2,3), 23);
     m.insert((2,3), 22);
     m.insert((5,3), 233);
     m.insert((2,2), -3);
 
-    println!("got mat =>{}", m);
-    println!("debug mat=>{:?}", m);
+    assert_eq!(m.get((5,3)), Some(&233));
+
+    assert_eq!(m[(2,3)], 22);
+    assert_eq!(m[(2,2)], -3);
     m.remove((2,2));
-    println!("remove");
-    println!("got mat =>{}", m);
-    println!("debug mat=>{:?}", m);
+    assert_eq!(m[(2,2)], 0);
 }
