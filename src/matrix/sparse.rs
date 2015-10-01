@@ -4,17 +4,37 @@ use std::iter;
 use std::fmt;
 use std::usize;
 use std::ops;
+use std::str::FromStr;
 
 use num::traits::Zero;
+
+use super::ParseMatrixError;
 
 
 /// Sparse matrix, Yale repersentation
 pub struct SparseYale<T> {
+    zero: T,
     dim: (usize, usize),
     vals: Vec<T>,
     col_starts: Vec<usize>,
     row_pos: Vec<usize>,
-    zero: T,
+}
+
+impl<T: Copy + Zero + PartialEq> SparseYale<T> {
+    pub fn from_vec(vec: Vec<Vec<T>>) -> Self {
+        let nrow = vec.len();
+        let ncol = vec[0].len();
+
+        let mut mat = SparseYale::zeros(nrow, ncol);
+        for (i, row) in vec.into_iter().enumerate() {
+            for (j, item) in row.into_iter().enumerate() {
+                if item != mat.zero {
+                    mat.insert((i,j), item);
+                }
+            }
+        }
+        mat
+    }
 }
 
 impl<T: Copy + Zero> SparseYale<T> {
@@ -26,19 +46,6 @@ impl<T: Copy + Zero> SparseYale<T> {
             row_pos: vec![],
             zero: Zero::zero()
         }
-    }
-
-    pub fn from_vec(vec: Vec<Vec<T>>) -> Self {
-        let nrow = vec.len();
-        let ncol = vec[0].len();
-
-        let mut mat = SparseYale::zeros(nrow, ncol);
-        for (i, row) in vec.into_iter().enumerate() {
-            for (j, item) in row.into_iter().enumerate() {
-                mat.insert((i,j), item);
-            }
-        }
-        mat
     }
 
     pub fn shape(&self) -> (usize, usize) {
@@ -74,6 +81,24 @@ impl<T: Copy + Zero> SparseYale<T> {
             }
         }
         Some(&self.zero)
+    }
+
+    pub unsafe fn get_unchecked(&self, index: (usize, usize)) -> &T {
+        let (row, col) = index;
+        let nvals = self.vals.len();
+
+        let mut col_start_idx = self.col_starts[col];
+        loop {
+            if self.row_pos[col_start_idx] > row {
+                return &self.zero;
+            } else if self.row_pos[col_start_idx] == row {
+                return &self.vals[col_start_idx];
+            }
+            col_start_idx += 1;
+            if col_start_idx >= nvals || (col < self.ncol()-1 && col_start_idx >= self.col_starts[col+1]) {
+                return &self.zero;
+            }
+        }
     }
 
     /// Returns the element mutable ref of the given index, None if not exists
@@ -160,6 +185,18 @@ impl<T: Copy + Zero> SparseYale<T> {
             }
         }
     }
+
+    pub fn transpose(&self) -> Self {
+        let (nrow, ncol) = self.dim;
+        SparseYale {
+            dim: (ncol, nrow),
+            vals: vec![],
+            col_starts: iter::repeat(0).take(ncol).collect(),
+            row_pos: vec![],
+            zero: Zero::zero()
+        }
+
+    }
 }
 
 // index by tuple: slower
@@ -179,6 +216,35 @@ impl<T: Zero + Copy> ops::IndexMut<(usize, usize)> for SparseYale<T> {
     }
 }
 
+impl<T: PartialEq + Zero + Copy + fmt::Debug> FromStr for SparseYale<T>
+    where T: FromStr, <T as FromStr>::Err: fmt::Debug {
+
+    type Err = ParseMatrixError;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let nrow = s.split(';').map(|s| s.trim()).filter(|s| !s.is_empty()).count();
+        let ncol = s.split(';').next().unwrap()
+            .split(|c| c == ';' || c == ',' || c == ' ')
+            .map(|seg| seg.trim())
+            .filter(|seg| !seg.is_empty())
+            .count();
+
+        let mut idx = 0;
+
+        let mut mat = SparseYale::zeros(nrow, ncol);
+        let _ = s.split(|c| c == ';' || c == ',' || c == ' ')
+            .map(|seg| seg.trim())
+            .filter(|seg| !seg.is_empty())
+            .map(|seg| {
+                let v = seg.parse().unwrap();
+                if v != mat.zero {
+                    mat.insert((idx / ncol, idx % ncol), v);
+                }
+                idx += 1;
+            }).count();
+
+        Ok(mat)
+    }
+}
 
 impl<T: Copy + Zero + fmt::Debug> fmt::Debug for SparseYale<T> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -242,6 +308,13 @@ fn test_sparse_matrix_from_vec() {
     assert_eq!(mat.get((2,3)), Some(&0));
 }
 
+
+#[test]
+fn test_sparse_matrix_from_str() {
+    let mat: SparseYale<i32> = FromStr::from_str("3 0 1 0; 0 2 0 0; 0 0 0 0; 0 0 0 1").unwrap();
+    assert_eq!(mat.vals.len(), 4); // assert sparse
+    assert_eq!(mat[(3,3)], 1);
+}
 
 
 #[test]
