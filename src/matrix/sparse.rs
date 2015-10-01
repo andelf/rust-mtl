@@ -5,10 +5,93 @@ use std::fmt;
 use std::usize;
 use std::ops;
 use std::str::FromStr;
+use std::collections::BTreeMap;
 
 use num::traits::Zero;
 
 use super::ParseMatrixError;
+// use super::super::array::Array;
+
+use self::SparseMatrix::*;
+
+
+pub enum SparseMatrix<T> {
+    /// Block Sparse Row matrix
+    Bsr {
+        shape: (usize, usize),
+        data: Vec<T>,           // CSR format data array of the matrix
+        indices: Vec<usize>,    // CSR format index array
+        indptr: Vec<usize>,     // CSR format index pointer array
+        block_size: usize
+    },
+    /// A sparse matrix in COOrdinate format
+    Coo {
+        shape: (usize, usize),
+        data: Vec<T>,
+        row: Vec<usize>,        // COO format row index array of the matrix
+        col: Vec<usize>         // COO format column index array of the matrix
+    },
+    /// Compressed Sparse Column matrix
+    Csc {
+        shape: (usize, usize),
+        // nnz: usize,
+        data: Vec<T>,           // Data array of the matrix
+        indices: Vec<usize>,    // CSC format index array
+        indptr: Vec<usize>      // CSC format index pointer array
+    },
+    /// Compressed Sparse Row matrix
+    Csr {
+        shape: (usize, usize),
+        // nnz: usize,
+        data: Vec<T>,           // CSR format data array of the matrix
+        indices: Vec<usize>,    // CSR format index array
+        indptr: Vec<usize>      // CSR format index pointer array
+    },
+    /// Sparse matrix with DIAgonal storage
+    Dia {
+        shape: (usize, usize),
+        data: Vec<Vec<T>>,           // DIA format data array of the matrix
+        offsets: Vec<isize>          // DIA format offset array of the matrix
+    },
+    /// Dictionary Of Keys based sparse matrix
+    Dok {
+        shape: (usize, usize),
+        data: BTreeMap<(usize,usize), T>
+    },
+    /// Row-based linked list sparse matrix
+    Lil {
+        shape: (usize, usize),
+        data: Vec<Vec<T>>,
+        rows: Vec<Vec<usize>>
+    }
+}
+
+
+impl<T: Zero + Copy> SparseMatrix<T> {
+    /// Shape of the matrix
+    pub fn shape(&self) -> Vec<usize> {
+        match *self {
+            Csc { shape, .. } => vec![shape.0, shape.1],
+            Csr { shape, .. } => vec![shape.0, shape.1],
+            _                 => unimplemented!()
+        }
+    }
+
+
+    /// Number of dimensions (this is always 2)
+    pub fn ndim(&self) -> usize { 2 }
+
+
+    /// Number of nonzero elements
+    pub fn nnz(&self) -> usize {
+        unimplemented!()
+    }
+
+}
+
+
+
+
 
 
 /// Sparse matrix, Yale repersentation

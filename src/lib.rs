@@ -15,5 +15,6 @@ macro_rules! ix {
     )
 }
 
+pub mod traits;
 pub mod array;
 pub mod matrix;
