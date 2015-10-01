@@ -14,8 +14,8 @@ use super::ParseMatrixError;
 /// Sparse matrix, Yale repersentation
 pub struct SparseYale<T> {
     zero: T,
-    dim: (usize, usize),
-    vals: Vec<T>,
+    shape: (usize, usize),
+    data: Vec<T>,
     col_starts: Vec<usize>,
     row_pos: Vec<usize>,
 }
@@ -40,8 +40,8 @@ impl<T: Copy + Zero + PartialEq> SparseYale<T> {
 impl<T: Copy + Zero> SparseYale<T> {
     pub fn zeros(nrow: usize, ncol: usize) -> Self {
         SparseYale {
-            dim: (nrow, ncol),
-            vals: vec![],
+            shape: (nrow, ncol),
+            data: vec![],
             col_starts: iter::repeat(0).take(ncol).collect(),
             row_pos: vec![],
             zero: Zero::zero()
@@ -49,17 +49,17 @@ impl<T: Copy + Zero> SparseYale<T> {
     }
 
     pub fn shape(&self) -> (usize, usize) {
-        self.dim
+        self.shape
     }
 
     #[inline]
     fn nrow(&self) -> usize {
-        self.dim.0
+        self.shape.0
     }
 
     #[inline]
     fn ncol(&self) -> usize {
-        self.dim.1
+        self.shape.1
     }
 
     /// Returns the element of the given index, or None if the index is out of bounds.
@@ -70,14 +70,14 @@ impl<T: Copy + Zero> SparseYale<T> {
 
         let col_start_idx = self.col_starts[col];
         let col_end_idx = if col == self.ncol() - 1 {
-            self.vals.len()
+            self.data.len()
         } else {
             self.col_starts[col+1]
         };
 
         for i in col_start_idx .. col_end_idx {
             if self.row_pos[i] == row {
-                return self.vals.get(i);
+                return self.data.get(i);
             }
         }
         Some(&self.zero)
@@ -85,17 +85,17 @@ impl<T: Copy + Zero> SparseYale<T> {
 
     pub unsafe fn get_unchecked(&self, index: (usize, usize)) -> &T {
         let (row, col) = index;
-        let nvals = self.vals.len();
+        let ndata = self.data.len();
 
         let mut col_start_idx = self.col_starts[col];
         loop {
             if self.row_pos[col_start_idx] > row {
                 return &self.zero;
             } else if self.row_pos[col_start_idx] == row {
-                return &self.vals[col_start_idx];
+                return &self.data[col_start_idx];
             }
             col_start_idx += 1;
-            if col_start_idx >= nvals || (col < self.ncol()-1 && col_start_idx >= self.col_starts[col+1]) {
+            if col_start_idx >= ndata || (col < self.ncol()-1 && col_start_idx >= self.col_starts[col+1]) {
                 return &self.zero;
             }
         }
@@ -109,14 +109,14 @@ impl<T: Copy + Zero> SparseYale<T> {
 
         let col_start_idx = self.col_starts[col];
         let col_end_idx = if col == self.ncol() - 1 {
-            self.vals.len()
+            self.data.len()
         } else {
             self.col_starts[col+1]
         };
 
         for i in col_start_idx .. col_end_idx {
             if self.row_pos[i] == row {
-                return self.vals.get_mut(i);
+                return self.data.get_mut(i);
             }
         }
         None
@@ -129,29 +129,29 @@ impl<T: Copy + Zero> SparseYale<T> {
 
         let col_start_idx = self.col_starts[col];
         let col_end_idx = if col == self.ncol() - 1 {
-            self.vals.len()
+            self.data.len()
         } else {
             self.col_starts[col+1]
         };
 
-        let mut vals_insert_pos = col_start_idx;
+        let mut data_insert_pos = col_start_idx;
         for i in col_start_idx .. col_end_idx {
             if self.row_pos[i] == row {
-                self.vals[i] = it;
+                self.data[i] = it;
                 return;
             } else if self.row_pos[i] > row {
-                vals_insert_pos = i;
+                data_insert_pos = i;
                 break;
             }
         }
 
-        self.vals.insert(vals_insert_pos, it);
+        self.data.insert(data_insert_pos, it);
         for (i, idx) in self.col_starts.iter_mut().enumerate() {
             if i > col {
                 *idx += 1;
             }
         }
-        self.row_pos.insert(vals_insert_pos, row);
+        self.row_pos.insert(data_insert_pos, row);
     }
 
     pub fn remove(&mut self, index: (usize, usize)) {
@@ -161,36 +161,36 @@ impl<T: Copy + Zero> SparseYale<T> {
 
         let col_start_idx = self.col_starts[col];
         let col_end_idx = if col == self.ncol() - 1 {
-            self.vals.len()
+            self.data.len()
         } else {
             self.col_starts[col+1]
         };
 
-        let mut vals_remove_pos = usize::MAX;
+        let mut data_remove_pos = usize::MAX;
         for i in col_start_idx .. col_end_idx {
             if self.row_pos[i] == row {
-                vals_remove_pos = i;
+                data_remove_pos = i;
                 break;
             }
         }
 
-        if vals_remove_pos == usize::MAX {
+        if data_remove_pos == usize::MAX {
             return;
         }
-        let _ = self.vals.remove(vals_remove_pos);
-        let _ = self.row_pos.remove(vals_remove_pos);
+        let _ = self.data.remove(data_remove_pos);
+        let _ = self.row_pos.remove(data_remove_pos);
         for i in self.col_starts.iter_mut() {
-            if *i > vals_remove_pos {
+            if *i > data_remove_pos {
                 *i -= 1;
             }
         }
     }
 
     pub fn transpose(&self) -> Self {
-        let (nrow, ncol) = self.dim;
+        let (nrow, ncol) = self.shape;
         SparseYale {
-            dim: (ncol, nrow),
-            vals: vec![],
+            shape: (ncol, nrow),
+            data: vec![],
             col_starts: iter::repeat(0).take(ncol).collect(),
             row_pos: vec![],
             zero: Zero::zero()
@@ -248,29 +248,34 @@ impl<T: PartialEq + Zero + Copy + fmt::Debug> FromStr for SparseYale<T>
 
 impl<T: Copy + Zero + fmt::Debug> fmt::Debug for SparseYale<T> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "<SparseYale vals={:?} col_starts={:?} row_pos={:?}>", self.vals, self.col_starts, self.row_pos)
+        write!(f, "<SparseYale data={:?} col_starts={:?} row_pos={:?}>", self.data, self.col_starts, self.row_pos)
     }
 }
 
 
+/* Display a sparse matrix:
+  (0, 0)        3
+  (0, 2)        1
+  (1, 1)        2
+  (3, 3)        1
+*/
 impl<T: Copy + Zero + fmt::Display> fmt::Display for SparseYale<T> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        try!(writeln!(f, ""));
-        for j in 0 .. self.dim.0 {
+        for j in 0 .. self.shape.0 {
             if j == 0 {
                 try!(write!(f, "[["));
             } else {
                 try!(write!(f, " ["));
             }
-            for i in 0 .. self.dim.1 {
+            for i in 0 .. self.shape.1 {
                 try!(write!(f, "{:-4.}", self.get((j,i)).unwrap()));
-                if i == self.dim.1 - 1 {
+                if i == self.shape.1 - 1 {
                     try!(write!(f, "]"));
                 } else {
                     try!(write!(f, ", "));
                 }
             }
-            if j == self.dim.0 - 1 {
+            if j == self.shape.0 - 1 {
                 try!(write!(f, "]"));
             } else {
                 try!(writeln!(f, ""));
@@ -285,8 +290,8 @@ impl<T: Copy + Zero + fmt::Display> fmt::Display for SparseYale<T> {
 #[test]
 fn test_sparse_yale() {
     let mut m = SparseYale {
-        dim: (6, 6),
-        vals: vec![10, 45, 40, 2, 4, 3, 3, 9, 19, 7],
+        shape: (6, 6),
+        data: vec![10, 45, 40, 2, 4, 3, 3, 9, 19, 7],
         col_starts: vec![0, 3, 5, 8, 8, 8],
         row_pos: vec![0, 1, 3, 0, 2, 0, 1, 2, 0, 5],
         zero: 0,
@@ -312,7 +317,9 @@ fn test_sparse_matrix_from_vec() {
 #[test]
 fn test_sparse_matrix_from_str() {
     let mat: SparseYale<i32> = FromStr::from_str("3 0 1 0; 0 2 0 0; 0 0 0 0; 0 0 0 1").unwrap();
-    assert_eq!(mat.vals.len(), 4); // assert sparse
+    assert_eq!(mat.data.len(), 4); // assert sparse
+    println!("Debug => {:?}", mat);
+
     assert_eq!(mat[(3,3)], 1);
 }
 

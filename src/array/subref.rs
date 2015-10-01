@@ -44,12 +44,20 @@ impl<'a, T: Copy> ArrayType<T> for RefArray<'a, T> {
         self.open_mesh.iter().enumerate().map(|(i,v)| (*v).size(i, &self.arr.shape())).collect()
     }
 
-    fn get_ref<D: AsRef<[usize]>>(&self, index: D) -> &T {
+    fn get<D: AsRef<[usize]>>(&self, index: D) -> Option<&T> {
+        Some(&self.arr.data[self.offset_translate(index.as_ref())])
+    }
+
+    unsafe fn get_unchecked<D: AsRef<[usize]>>(&self, index: D) -> &T {
         &self.arr.data[self.offset_translate(index.as_ref())]
     }
 
-    fn get_mut<D: AsRef<[usize]>>(&mut self, _index: D) -> &mut T {
-        panic!("unmutable array ref")
+    fn get_mut<D: AsRef<[usize]>>(&mut self, _index: D) -> Option<&mut T> {
+        None
+    }
+
+    unsafe fn get_unchecked_mut<D: AsRef<[usize]>>(&mut self, _index: D) -> &mut T {
+        panic!("can't get mut ref of a Unmutable RefArray")
     }
 }
 
@@ -59,7 +67,7 @@ impl<'a, T: Copy, D: AsRef<[usize]>> ops::Index<D> for RefArray<'a, T> {
 
     #[inline]
     fn index<'b>(&'b self, index: D) -> &'b T {
-        self.get_ref(index)
+        self.get(index).unwrap()
     }
 }
 
@@ -121,7 +129,7 @@ impl<'a, T: Copy> RefMutArray<'a, T> {
     pub fn move_from(&mut self, src: Array<T>) {
         assert!(self.shape() == src.shape(), "move_from() must be called among arrays of same shape");
         for ref idx in self.shape().iter_indices() {
-            *self.get_mut(idx) = src[idx];
+            let _ = self.get_mut(idx).map(|v| *v = src[idx]).expect("assignment");
         }
     }
 }
@@ -131,11 +139,20 @@ impl<'a, T: Copy> ArrayType<T> for RefMutArray<'a, T> {
         self.open_mesh.iter().enumerate().map(|(i,v)| (*v).size(i, &self.arr.shape())).collect()
     }
 
-    fn get_ref<D: AsRef<[usize]>>(&self, index: D) -> &T {
+    fn get<D: AsRef<[usize]>>(&self, index: D) -> Option<&T> {
+        Some(&self.arr.data[self.offset_translate(index.as_ref())])
+    }
+
+    fn get_mut<D: AsRef<[usize]>>(&mut self, index: D) -> Option<&mut T> {
+        let offset = self.offset_translate(index.as_ref());
+        Some(&mut self.arr.data[offset])
+    }
+
+    unsafe fn get_unchecked<D: AsRef<[usize]>>(&self, index: D) -> &T {
         &self.arr.data[self.offset_translate(index.as_ref())]
     }
 
-    fn get_mut<D: AsRef<[usize]>>(&mut self, index: D) -> &mut T {
+    unsafe fn get_unchecked_mut<D: AsRef<[usize]>>(&mut self, index: D) -> &mut T {
         let offset = self.offset_translate(index.as_ref());
         &mut self.arr.data[offset]
     }
@@ -146,7 +163,7 @@ impl<'a, T: Copy, D: AsRef<[usize]>> ops::Index<D> for RefMutArray<'a, T> {
 
     #[inline]
     fn index<'b>(&'b self, index: D) -> &'b T {
-        self.get_ref(index)
+        self.get(index).unwrap()
     }
 }
 
@@ -154,7 +171,7 @@ impl<'a, T: Copy, D: AsRef<[usize]>> ops::Index<D> for RefMutArray<'a, T> {
 impl<'a, T: Copy, D: AsRef<[usize]>> ops::IndexMut<D> for RefMutArray<'a, T> {
     #[inline]
     fn index_mut<'b>(&'b mut self, index: D) -> &'b mut T {
-        self.get_mut(index)
+        self.get_mut(index).unwrap()
     }
 }
 

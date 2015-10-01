@@ -248,12 +248,14 @@ fn test_index_ranges() {
     assert_eq!((..).to_idx_vec(0, &dims), vec![0, 1, 2, 3]);
 }
 
-
-
 pub trait ArrayType<T> {
     fn shape(&self) -> Vec<usize>;
-    fn get_ref<D: AsRef<[usize]>>(&self, index: D) -> &T;
-    fn get_mut<D: AsRef<[usize]>>(&mut self, index: D) -> &mut T;
+
+    fn get<D: AsRef<[usize]>>(&self, index: D) -> Option<&T>;
+    fn get_mut<D: AsRef<[usize]>>(&mut self, index: D) -> Option<&mut T>;
+
+    unsafe fn get_unchecked<D: AsRef<[usize]>>(&self, index: D) -> &T;
+    unsafe fn get_unchecked_mut<D: AsRef<[usize]>>(&mut self, index: D) -> &mut T;
 
     fn size(&self) -> usize {
         self.shape().nelem()
@@ -268,6 +270,9 @@ pub trait ArrayType<T> {
         }
     }
 }
+
+
+
 /// n-d Array
 #[derive(Clone, PartialEq, Debug)]
 pub struct Array<T> {
@@ -280,12 +285,22 @@ impl<T: Copy> ArrayType<T> for Array<T> {
         self.shape.clone()
     }
 
-    fn get_ref<D: AsRef<[usize]>>(&self, index: D) -> &T {
-        &self.data[self.offset_of(index.as_ref())]
+    // FIXME: handle index overflow
+    fn get<D: AsRef<[usize]>>(&self, index: D) -> Option<&T> {
+        Some(&self.data[self.offset_of(index.as_ref())])
     }
 
-    fn get_mut<D: AsRef<[usize]>>(&mut self, index: D) -> &mut T {
+    unsafe fn get_unchecked<D: AsRef<[usize]>>(&self, index: D) -> &T {
+        &self.data[self.offset_of_unchecked(index.as_ref())]
+    }
+
+    fn get_mut<D: AsRef<[usize]>>(&mut self, index: D) -> Option<&mut T> {
         let idx = self.offset_of(index.as_ref());
+        Some(&mut self.data[idx])
+    }
+
+    unsafe fn get_unchecked_mut<D: AsRef<[usize]>>(&mut self, index: D) -> &mut T {
+        let idx = self.offset_of_unchecked(index.as_ref());
         &mut self.data[idx]
     }
 }
@@ -300,6 +315,11 @@ impl<T: Copy> Array<T> {
             data: v,
             shape: shape
         }
+    }
+
+    #[inline]
+    pub fn ndim(&self) -> usize {
+        self.shape.len()
     }
 
     pub fn from_vec(v: Vec<T>) -> Array<T> {
@@ -318,10 +338,19 @@ impl<T: Copy> Array<T> {
         }
     }
 
-    fn offset_of(&self, index: &[usize]) -> usize {
+    fn offset_of_unchecked(&self, index: &[usize]) -> usize {
         index.iter().enumerate()
             .map(|(i, &ax)| {
-                assert!(ax < self.shape[i]);
+                self.shape.iter().skip(i+1).product::<usize>() * ax
+            })
+            .sum()
+    }
+
+    fn offset_of(&self, index: &[usize]) -> usize {
+        assert!(index.len() == self.ndim());
+        index.iter().enumerate()
+            .map(|(i, &ax)| {
+                assert!(ax < self.shape[i], "ax {} overflow, should be lower than {}", ax, self.shape[i]);
                 self.shape.iter().skip(i+1).product::<usize>() * ax
             })
             .sum()
@@ -364,7 +393,48 @@ impl<T: Copy> Array<T> {
         }
         false
     }
+
+    pub fn enumerate<'t>(&'t self) -> Enumerate<'t, T> {
+        Enumerate {
+            iter: self.iter_indices(),
+            arr: self,
+            count: self.size()
+        }
+    }
 }
+
+
+pub struct Enumerate<'t, T:'t> {
+    iter: ArrayIndexIter,
+    arr: &'t Array<T>,
+    count: usize
+}
+
+impl<'t, T: Copy> Iterator for Enumerate<'t, T> {
+    type Item = (Vec<usize>, &'t T);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if let Some(idx) = self.iter.next() {
+            let val = &self.arr[&idx];
+            self.count -= 1;
+            Some((idx, val))
+        } else {
+            None
+        }
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        (self.count, Some(self.count))
+    }
+}
+
+impl<'t, T: Copy> ExactSizeIterator for Enumerate<'t, T> {
+    fn len(&self) -> usize {
+        self.size_hint().0
+    }
+}
+
+
 
 impl<A: Copy> FromIterator<A> for Array<A> {
     fn from_iter<T: IntoIterator<Item=A>>(iterator: T) -> Self {
@@ -378,7 +448,7 @@ impl<T: Copy, D: AsRef<[usize]>> ops::Index<D> for Array<T> {
 
     #[inline]
     fn index<'a>(&'a self, index: D) -> &'a T {
-        self.get_ref(index)
+        self.get(index).unwrap()
     }
 }
 
@@ -815,4 +885,17 @@ fn test_to_array_trait() {
     let v = vec![2, 3, 4, 5];
     let arr: Array<i32> = v.to_array();
     assert!(arr.shape() == vec![4], "ToArray should perserve shape");
+}
+
+#[test]
+fn test_enumerate() {
+    let v = vec![2, 3, 4, 5];
+    let arr: Array<i32> = v.to_array().reshape([2,2]);
+    let mut it = arr.enumerate();
+    assert_eq!(it.next(), Some((vec![0,0], &2)));
+    for _ in 0..2 {
+        let _  = it.next().unwrap();
+    }
+    assert_eq!(it.next(), Some((vec![1,1], &5)));
+    assert_eq!(it.next(), None);
 }
