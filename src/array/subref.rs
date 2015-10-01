@@ -2,7 +2,8 @@ use std::iter;
 use std::fmt;
 use std::ops;
 
-use super::{Array, ArrayType, ArrayIx, ArrayShape, ToArray};
+use super::{Array, ArrayIx, ToArray, ArrayIndexIter};
+use super::super::traits::{ArrayType, ArrayShape};
 
 
 // RefArray
@@ -27,12 +28,19 @@ impl<'a, T: Copy> RefArray<'a, T> {
         }
         self.arr.offset_of(&ix)
     }
+
+    pub fn iter_indices(&self) -> ArrayIndexIter {
+        ArrayIndexIter {
+            current: iter::repeat(0).take(self.ndim()).collect(),
+            shape: self.shape()
+        }
+    }
 }
 
 impl<'a, T: Copy> ToArray<T> for RefArray<'a, T> {
     fn to_array(&self) -> Array<T> {
         let mut ret = Array::new(self.shape());
-        for ref idx in self.shape().iter_indices() {
+        for ref idx in self.iter_indices() {
             ret[idx] = self[idx];
         }
         ret
@@ -126,9 +134,15 @@ impl<'a, T: Copy> RefMutArray<'a, T> {
         self.arr.offset_of(&ix)
     }
 
+    fn iter_indices(&self) -> ArrayIndexIter {
+        ArrayIndexIter {
+            current: iter::repeat(0).take(self.ndim()).collect(),
+            shape: self.shape()
+        }
+    }
     pub fn move_from(&mut self, src: Array<T>) {
         assert!(self.shape() == src.shape(), "move_from() must be called among arrays of same shape");
-        for ref idx in self.shape().iter_indices() {
+        for ref idx in self.iter_indices() {
             let _ = self.get_mut(idx).map(|v| *v = src[idx]).expect("assignment");
         }
     }

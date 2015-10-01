@@ -7,9 +7,9 @@ use std::iter::FromIterator;
 use num::traits::{One, Zero};
 use rand::{thread_rng, Rng};
 
-
 mod subref;
 
+pub use super::traits::{ArrayType, ArrayShape};
 pub use self::subref::RefArray;
 pub use self::subref::RefMutArray;
 
@@ -57,83 +57,6 @@ impl ExactSizeIterator for ArrayIndexIter {
         self.size_hint().0
     }
 }
-
-// array shape for creating
-pub trait ArrayShape {
-    fn to_shape_vec(&self) -> Vec<usize>;
-    fn ndim(&self) -> usize {
-        self.to_shape_vec().len()
-    }
-    fn nelem(&self) -> usize {
-        self.to_shape_vec().iter().product()
-    }
-    fn iter_indices(&self) -> ArrayIndexIter {
-        ArrayIndexIter {
-            current: iter::repeat(0).take(self.ndim()).collect(),
-            shape: self.to_shape_vec()
-        }
-    }
-}
-
-impl<'a, S: ArrayShape + ?Sized> ArrayShape for &'a S {
-    fn to_shape_vec(&self) -> Vec<usize> {
-        // must deref or leads to recusive
-        (*self).to_shape_vec()
-    }
-}
-
-impl ArrayShape for Vec<usize> {
-    fn to_shape_vec(&self) -> Vec<usize> {
-        self.clone()
-    }
-}
-
-impl ArrayShape for [usize] {
-    fn to_shape_vec(&self) -> Vec<usize> {
-        self.to_vec()
-    }
-}
-
-// usize is for MxM matrix
-impl ArrayShape for usize {
-    fn to_shape_vec(&self) -> Vec<usize> {
-        vec![*self, *self]
-    }
-}
-
-impl ArrayShape for (usize,) {
-    fn to_shape_vec(&self) -> Vec<usize> {
-        vec![self.0]
-    }
-}
-
-impl ArrayShape for (usize, usize) {
-    fn to_shape_vec(&self) -> Vec<usize> {
-        vec![self.0, self.1]
-    }
-}
-
-impl ArrayShape for (usize, usize, usize) {
-    fn to_shape_vec(&self) -> Vec<usize> {
-        vec![self.0, self.1, self.2]
-    }
-}
-
-macro_rules! impl_array_shape_for_fixed_size_array {
-    ($typ:ty, $size:expr) => (
-        impl ArrayShape for [$typ; $size] {
-            fn to_shape_vec(&self) -> Vec<usize> {
-                self.iter().map(|&i| i as usize).collect()
-            }
-        }
-    )
-}
-
-impl_array_shape_for_fixed_size_array!(usize, 1);
-impl_array_shape_for_fixed_size_array!(usize, 2);
-impl_array_shape_for_fixed_size_array!(usize, 3);
-// impl_array_shape_for_fixed_size_array!(i32, 1);
-
 
 
 // Array Index
@@ -248,30 +171,6 @@ fn test_index_ranges() {
     assert_eq!((..).to_idx_vec(0, &dims), vec![0, 1, 2, 3]);
 }
 
-pub trait ArrayType<T> {
-    fn shape(&self) -> Vec<usize>;
-
-    fn get<D: AsRef<[usize]>>(&self, index: D) -> Option<&T>;
-    fn get_mut<D: AsRef<[usize]>>(&mut self, index: D) -> Option<&mut T>;
-
-    unsafe fn get_unchecked<D: AsRef<[usize]>>(&self, index: D) -> &T;
-    unsafe fn get_unchecked_mut<D: AsRef<[usize]>>(&mut self, index: D) -> &mut T;
-
-    fn size(&self) -> usize {
-        self.shape().nelem()
-    }
-
-    fn iter_indices(&self) -> ArrayIndexIter {
-        let shape = self.shape();
-        let start_idx = iter::repeat(0).take(shape.len()).collect();
-        ArrayIndexIter {
-            current: start_idx,
-            shape: shape
-        }
-    }
-}
-
-
 
 /// n-d Array
 #[derive(Clone, PartialEq, Debug)]
@@ -313,6 +212,15 @@ impl<T: Copy> Array<T> {
         unsafe { v.set_len(nelem) };
         Array {
             data: v,
+            shape: shape
+        }
+    }
+
+    pub fn iter_indices(&self) -> ArrayIndexIter {
+        let shape = self.shape();
+        let start_idx = iter::repeat(0).take(shape.len()).collect();
+        ArrayIndexIter {
+            current: start_idx,
             shape: shape
         }
     }
