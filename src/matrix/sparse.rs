@@ -117,6 +117,15 @@ impl<T: Zero + Copy> SparseMatrix<T> {
         }
     }
 
+    pub fn empty_csr(shape: (usize, usize)) -> Self {
+        Csr {
+            shape: shape,
+            data: vec![],
+            indices: vec![],
+            indptr: iter::repeat(0).take(shape.0 + 1).collect()
+        }
+    }
+
     // get/set
     /// Returns the element of the given index, or None if not exists
     pub fn get(&self, index: (usize, usize)) -> Option<&T> {
@@ -130,6 +139,17 @@ impl<T: Zero + Copy> SparseMatrix<T> {
                 let col_end_idx = indptr[col+1];
 
                 for i in col_start_idx .. col_end_idx {
+                    if indices[i] == row {
+                        return data.get(i);
+                    }
+                }
+                None
+            },
+            Csr { ref data, ref indptr, ref indices, .. } => {
+                let row_start_idx = indptr[row];
+                let row_end_idx = indptr[row+1];
+
+                for i in row_start_idx .. row_end_idx {
                     if indices[i] == row {
                         return data.get(i);
                     }
@@ -160,6 +180,16 @@ impl<T: Zero + Copy> SparseMatrix<T> {
                 let col_end_idx = indptr[col+1];
 
                 for i in col_start_idx .. col_end_idx {
+                    if indices[i] == row {
+                        return data.get_mut(i);
+                    }
+                }
+            },
+            Csr { ref mut data, ref indptr, ref indices, .. } => {
+                let row_start_idx = indptr[row];
+                let row_end_idx = indptr[row+1];
+
+                for i in row_start_idx .. row_end_idx {
                     if indices[i] == row {
                         return data.get_mut(i);
                     }
@@ -207,10 +237,38 @@ impl<T: Zero + Copy> SparseMatrix<T> {
                 }
                 indices.insert(data_insert_pos, row);
             },
+            Csr { ref mut data, ref mut indptr, ref mut indices, .. } => {
+                let row_start_idx = indptr[row];
+                let row_end_idx = indptr[row+1];
+
+                let mut data_insert_pos = row_start_idx;
+                for i in row_start_idx .. row_end_idx {
+                    if indices[i] == col {
+                        data[i] = it;
+                        return;
+                    } else if indices[i] > col {
+                        data_insert_pos = i;
+                        break;
+                    }
+                }
+
+                println!("WARNING: Changing the sparsity structure of a CSR matrix is expensive.");
+                data.insert(data_insert_pos, it);
+                for (i, idx) in indptr.iter_mut().enumerate() {
+                    if i > row {
+                        *idx += 1;
+                    }
+                }
+                indices.insert(data_insert_pos, col);
+            },
+            Coo { ref mut data, ref mut rows, ref mut cols, .. } => {
+                data.push(it);
+                rows.push(row);
+                cols.push(col);
+            }
             _ => unimplemented!()
         }
     }
-
 
     // convertion
     pub fn to_csc(&self) -> Self {
@@ -226,6 +284,14 @@ impl<T: Zero + Copy> SparseMatrix<T> {
                 unimplemented!()
             },
             ref this @ Csc { .. } => this.clone(),
+            _ => unimplemented!()
+        }
+    }
+
+    pub fn to_csr(&self) -> Self {
+        match *self {
+            ref this @ Coo { .. } => unimplemented!(),
+            ref this @ Csr { .. } => this.clone(),
             _ => unimplemented!()
         }
     }
@@ -255,6 +321,38 @@ impl<T: Zero + Copy> SparseMatrix<T> {
             _ => unimplemented!()
         }
     }
+
+    // operation
+    pub fn transpose(&self) -> Self {
+        let new_shape = (self.shape().1, self.shape().0);
+        match *self {
+            Csc { ref data, ref indptr, ref indices, .. } => {
+                Csr {
+                    shape: new_shape,
+                    data: data.clone(),
+                    indptr: indptr.clone(),
+                    indices: indices.clone()
+                }
+            },
+            Csr { ref data, ref indptr, ref indices, .. } => {
+                Csc {
+                    shape: new_shape,
+                    data: data.clone(),
+                    indptr: indptr.clone(),
+                    indices: indices.clone()
+                }
+            },
+            Coo { ref data, ref rows, ref cols, .. } => {
+                Coo {
+                    shape: new_shape,
+                    data: data.clone(),
+                    rows: cols.clone(),
+                    cols: rows.clone()
+                }
+            }
+            _ => unimplemented!()
+        }
+    }
 }
 
 
@@ -270,6 +368,14 @@ impl<T: fmt::Display> fmt::Display for SparseMatrix<T> {
                 for (j, &ptr) in indptr.iter().take(shape.1).enumerate() {
                     for (off, val) in data[ptr .. indptr[j+1]].iter().enumerate() {
                         let i = indices[ptr + off];
+                        try!(writeln!(f, "  {:?}\t{}", (i, j), val));
+                    }
+                }
+            },
+            Csr { ref shape, ref data, ref indptr, ref indices } => {
+                for (i, &ptr) in indptr.iter().take(shape.1).enumerate() {
+                    for (off, val) in data[ptr .. indptr[i+1]].iter().enumerate() {
+                        let j = indices[ptr + off];
                         try!(writeln!(f, "  {:?}\t{}", (i, j), val));
                     }
                 }
@@ -317,12 +423,29 @@ impl<T: PartialEq + Zero + Copy + fmt::Debug> FromStr for SparseMatrix<T>
 
 #[test]
 fn test_sparse_matrix_build() {
-    let mut mat: SparseMatrix<f32> = SparseMatrix::empty_csc((4,3));
+    let mut mat: SparseMatrix<f32> = SparseMatrix::empty_csr((4,3));
 
     mat.set((0,0), 1.0);
-
     mat.set((1,2), 2.0);
 
     println!("mat => \n{}", mat);
     println!("mat => {:?}", mat);
+
+    println!("mat.T => \n{}", mat.transpose());
+    println!("mat.T => {:?}", mat.transpose());
+
+    let mut mat: SparseMatrix<f32> = SparseMatrix::empty_coo((6,5));
+    mat.set((0,0), 10.0);
+    mat.set((1,0), 45.0);
+    mat.set((3,0), 40.0);
+    mat.set((0,1), 2.0);
+    mat.set((2,1), 4.0);
+    mat.set((0,2), 3.0);
+    mat.set((1,2), 3.0);
+    mat.set((2,2), 9.0);
+    mat.set((0,4), 19.0);
+    mat.set((5,4), 7.0);
+    println!("mat => \n{}", mat);
+    println!("mat => {:?}", mat);
+
 }
