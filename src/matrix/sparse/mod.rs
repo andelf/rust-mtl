@@ -290,11 +290,11 @@ impl<T: Zero + Copy> SparseMatrix<T> {
         }
         match *self {
             Coo { shape, ref data, ref rows, ref cols } => {
-                let (rowptr, col_indices, vals) = sparsetools::coo_to_csc(shape.0, shape.1, nnz, rows, cols, data);
+                let (colptr, row_indices, vals) = sparsetools::coo_to_csc(shape.0, shape.1, nnz, rows, cols, data);
                 Csc {
                     shape: shape,
-                    indptr: rowptr,
-                    indices: col_indices,
+                    indptr: colptr,
+                    indices: row_indices,
                     data: vals
                 }
             },
@@ -400,7 +400,7 @@ impl<T: fmt::Display> fmt::Display for SparseMatrix<T> {
                 }
             },
             Csr { ref shape, ref data, ref indptr, ref indices } => {
-                for (i, &ptr) in indptr.iter().take(shape.1).enumerate() {
+                for (i, &ptr) in indptr.iter().take(shape.0).enumerate() {
                     for (off, val) in data[ptr .. indptr[i+1]].iter().enumerate() {
                         let j = indices[ptr + off];
                         try!(writeln!(f, "  {:?}\t{}", (i, j), val));
@@ -514,7 +514,7 @@ fn test_parse_sparse_matrix() {
     assert!(mat.nnz() == 9);
     let m2 = mat.to_csr();
     let m3 = mat.to_csc();
-    println!("debug \n{}\n{}", m3, m2);
+
     for i in 0 .. 5 {
         for j in 0 .. 6 {
             assert!(mat.get((i,j)) == m2.get((i,j)), "mat[{:?}] equeals", (i,j));
