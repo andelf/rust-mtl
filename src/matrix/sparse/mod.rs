@@ -176,6 +176,9 @@ impl<T: Zero + Copy> SparseMatrix<T> {
                 }
                 None
             },
+            Lil { shape, ref data, ref rows } => {
+                tools::lil::get1(shape.0, shape.1, rows, data, row, col)
+            }
             _ => unimplemented!()
         }
     }
@@ -214,6 +217,9 @@ impl<T: Zero + Copy> SparseMatrix<T> {
                     }
                 }
             },
+            Lil { shape, ref mut data, ref rows } => {
+                return tools::lil::get1_mut(shape.0, shape.1, rows, data, row, col)
+            }
             _ => unimplemented!()
         }
         None
@@ -277,6 +283,9 @@ impl<T: Zero + Copy> SparseMatrix<T> {
                 data.push(it);
                 rows.push(row);
                 cols.push(col);
+            }
+            Lil { shape, ref mut data, ref mut rows, .. } => {
+                tools::lil::insert(shape.0, shape.1, rows, data, row, col, it);
             }
             _ => unimplemented!()
         }
@@ -515,12 +524,17 @@ fn test_sparse_matrix_build() {
     println!("mat => \n{}", mat);
     println!("mat => {:?}", mat);
 
+    // LIL matrix
     let mut mat: SparseMatrix<i32> = SparseMatrix::Lil {
         shape: (4,4),
         data: vec![vec![3,1], vec![2,3], vec![], vec![1]],
         rows: vec![vec![0,2], vec![1,3], vec![], vec![3]]
     };
     println!("mat => \n{}", mat);
+
+    assert_eq!(mat.get((1,3)), Some(&3));
+    mat.set((1,2), 5);
+    assert_eq!(mat.get((1,2)), Some(&5));
 }
 
 

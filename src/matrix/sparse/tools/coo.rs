@@ -27,7 +27,7 @@ use std::iter;
  *   Complexity: Linear.  Specifically O(nnz(A) + max(n_row,n_col))
  *
  */
-pub fn to_csr<T: Copy + Sized>(nrow: usize, ncol: usize, nnz: usize,
+pub fn to_csr<T: Copy + Sized>(nrow: usize, _ncol: usize, nnz: usize,
                                    ai: &[usize], aj: &[usize], ax: &[T]) -> (Vec<usize>, Vec<usize>, Vec<T>) {
     //bp: &mut [usize], bj: &mut [usize], bx: &[T]) {
 
