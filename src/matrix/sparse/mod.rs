@@ -13,7 +13,7 @@ use super::ParseMatrixError;
 
 use self::SparseMatrix::*;
 
-mod sparsetools;
+mod tools;
 
 #[derive(Clone, Debug)]
 pub enum SparseMatrix<T> {
@@ -290,7 +290,16 @@ impl<T: Zero + Copy> SparseMatrix<T> {
         }
         match *self {
             Coo { shape, ref data, ref rows, ref cols } => {
-                let (colptr, row_indices, vals) = sparsetools::coo_to_csc(shape.0, shape.1, nnz, rows, cols, data);
+                let (colptr, row_indices, vals) = tools::coo::to_csc(shape.0, shape.1, nnz, rows, cols, data);
+                Csc {
+                    shape: shape,
+                    indptr: colptr,
+                    indices: row_indices,
+                    data: vals
+                }
+            },
+            Csr { shape, ref data, ref indptr, ref indices } => {
+                let (colptr, row_indices, vals) = tools::csr::to_csc(shape.0, shape.1, indptr, indices, data);
                 Csc {
                     shape: shape,
                     indptr: colptr,
@@ -310,13 +319,17 @@ impl<T: Zero + Copy> SparseMatrix<T> {
         }
         match *self {
             Coo { shape, ref data, ref rows, ref cols } => {
-                let (rowptr, col_indices, vals) = sparsetools::coo_to_csr(shape.0, shape.1, nnz, rows, cols, data);
+                let (rowptr, col_indices, vals) = tools::coo::to_csr(shape.0, shape.1, nnz, rows, cols, data);
                 Csr {
                     shape: shape,
                     indptr: rowptr,
                     indices: col_indices,
                     data: vals
                 }
+            },
+            Csc { shape, ref data, ref indptr, ref indices } => {
+                let (rowptr, col_indices, vals) = tools::csc::to_csr(shape.0, shape.1, indptr, indices, data);
+                Csr { shape: shape, indptr: rowptr, indices: col_indices, data: vals }
             },
             ref this @ Csr { .. } => this.clone(),
             _ => unimplemented!()
@@ -337,12 +350,21 @@ impl<T: Zero + Copy> SparseMatrix<T> {
                         cols.push(j);
                     }
                 }
-                Coo {
-                    shape: shape,
-                    data: vals,
-                    rows: rows,
-                    cols: cols
+                Coo { shape: shape, data: vals, rows: rows, cols: cols }
+            },
+            Csr { shape, ref data, ref indptr, ref indices } => {
+                let mut vals = vec![];
+                let mut rows = vec![];
+                let mut cols = vec![];
+                for (i, &ptr) in indptr.iter().take(shape.0).enumerate() {
+                    for (off, val) in data[ptr .. indptr[i+1]].iter().enumerate() {
+                        let j = indices[ptr + off];
+                        vals.push(*val);
+                        rows.push(i);
+                        cols.push(j);
+                    }
                 }
+                Coo { shape: shape, data: vals, rows: rows, cols: cols }
             },
             ref this @ Coo { .. } => this.clone(),
             _ => unimplemented!()
@@ -515,10 +537,17 @@ fn test_parse_sparse_matrix() {
     let m2 = mat.to_csr();
     let m3 = mat.to_csc();
 
+    let m4 = m2.to_csc();
+    let m5 = m4.to_csr();
+
+    let m6 = m5.to_coo();
     for i in 0 .. 5 {
         for j in 0 .. 6 {
             assert!(mat.get((i,j)) == m2.get((i,j)), "mat[{:?}] equeals", (i,j));
             assert!(mat.get((i,j)) == m3.get((i,j)), "mat[{:?}] equeals", (i,j));
+            assert!(mat.get((i,j)) == m4.get((i,j)), "mat[{:?}] equeals", (i,j));
+            assert!(mat.get((i,j)) == m5.get((i,j)), "mat[{:?}] equeals", (i,j));
+            assert!(mat.get((i,j)) == m6.get((i,j)), "mat[{:?}] equeals", (i,j));
         }
     }
 }
