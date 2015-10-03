@@ -5,7 +5,7 @@ authors = ["andelf <andelf@gmail.com>"]
 license = "MIT"
 readme = "README.md"
 repository = "https://github.com/andelf/rust-mtl"
-description = "Matrix template library"
+description = "Matrix template library. Dense2D matrix, SparseMatrix."
 
 [dependencies]
 num = "*"
