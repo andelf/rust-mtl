@@ -13,6 +13,7 @@ use super::ParseMatrixError;
 
 use self::SparseMatrix::*;
 
+mod sparsetools;
 
 #[derive(Clone, Debug)]
 pub enum SparseMatrix<T> {
@@ -84,7 +85,8 @@ impl<T: Zero + Copy> SparseMatrix<T> {
     /// Number of nonzero elements
     pub fn nnz(&self) -> usize {
         match *self {
-            Coo { ref data, .. } => data.len(),
+            Coo { ref data, .. } | Csr { ref data, .. } | Csc { ref data, .. } => data.len(),
+            Lil { ref data, .. } => data.iter().map(|rs| rs.len()).sum(),
             _ => unimplemented!()
         }
     }
@@ -98,6 +100,7 @@ impl<T: Zero + Copy> SparseMatrix<T> {
             cols: ij.iter().map(|&(_row,col)| col).collect()
         }
     }
+
 
     pub fn empty_coo(shape: (usize, usize)) -> Self {
         Coo {
@@ -126,6 +129,15 @@ impl<T: Zero + Copy> SparseMatrix<T> {
         }
     }
 
+    pub fn empty_lil(shape: (usize, usize)) -> Self {
+        let nrow = shape.0;
+        Lil {
+            shape: shape,
+            data: iter::repeat(vec![]).take(nrow).collect(),
+            rows: iter::repeat(vec![]).take(nrow).collect()
+        }
+    }
+
     // get/set
     /// Returns the element of the given index, or None if not exists
     pub fn get(&self, index: (usize, usize)) -> Option<&T> {
@@ -150,7 +162,7 @@ impl<T: Zero + Copy> SparseMatrix<T> {
                 let row_end_idx = indptr[row+1];
 
                 for i in row_start_idx .. row_end_idx {
-                    if indices[i] == row {
+                    if indices[i] == col {
                         return data.get(i);
                     }
                 }
@@ -272,16 +284,19 @@ impl<T: Zero + Copy> SparseMatrix<T> {
 
     // convertion
     pub fn to_csc(&self) -> Self {
-        if self.nnz() == 0 {
+        let nnz = self.nnz();
+        if nnz == 0 {
             return Self::empty_csc(self.shape());
         }
         match *self {
-            ref this @ Coo { .. } => {
-                // let (m, n) = shape;
-                // let indptr = iter::repeat(0usize).take(n+1).collect();
-                // let indices = iter::repeat.take(this.nnz()).collect();
-                // let data = iter::repeat(Zero::zero()).take(this.nnz()).collect();
-                unimplemented!()
+            Coo { shape, ref data, ref rows, ref cols } => {
+                let (rowptr, col_indices, vals) = sparsetools::coo_to_csc(shape.0, shape.1, nnz, rows, cols, data);
+                Csc {
+                    shape: shape,
+                    indptr: rowptr,
+                    indices: col_indices,
+                    data: vals
+                }
             },
             ref this @ Csc { .. } => this.clone(),
             _ => unimplemented!()
@@ -289,8 +304,20 @@ impl<T: Zero + Copy> SparseMatrix<T> {
     }
 
     pub fn to_csr(&self) -> Self {
+        let nnz = self.nnz();
+        if nnz == 0 {
+            return Self::empty_csr(self.shape());
+        }
         match *self {
-            ref this @ Coo { .. } => unimplemented!(),
+            Coo { shape, ref data, ref rows, ref cols } => {
+                let (rowptr, col_indices, vals) = sparsetools::coo_to_csr(shape.0, shape.1, nnz, rows, cols, data);
+                Csr {
+                    shape: shape,
+                    indptr: rowptr,
+                    indices: col_indices,
+                    data: vals
+                }
+            },
             ref this @ Csr { .. } => this.clone(),
             _ => unimplemented!()
         }
@@ -380,6 +407,13 @@ impl<T: fmt::Display> fmt::Display for SparseMatrix<T> {
                     }
                 }
             },
+            Lil { ref data, ref rows, .. } => {
+                for (i, row) in rows.iter().enumerate() {
+                    for (pos, &j) in row.iter().enumerate() {
+                        try!(writeln!(f, "  {:?}\t{}", (i, j), data[i][pos]));
+                    }
+                }
+            },
             _ => unimplemented!()
         }
         Ok(())
@@ -389,12 +423,18 @@ impl<T: fmt::Display> fmt::Display for SparseMatrix<T> {
 
 
 
-/*
 impl<T: PartialEq + Zero + Copy + fmt::Debug> FromStr for SparseMatrix<T>
     where T: FromStr, <T as FromStr>::Err: fmt::Debug {
 
     type Err = ParseMatrixError;
+
+    /// construct a matrx of COO format
     fn from_str(s: &str) -> Result<Self, Self::Err> {
+
+        let mut vals = vec![];
+        let mut rows = vec![];
+        let mut cols = vec![];
+
         let nrow = s.split(';').map(|s| s.trim()).filter(|s| !s.is_empty()).count();
         let ncol = s.split(';').next().unwrap()
             .split(|c| c == ';' || c == ',' || c == ' ')
@@ -404,21 +444,26 @@ impl<T: PartialEq + Zero + Copy + fmt::Debug> FromStr for SparseMatrix<T>
 
         let mut idx = 0;
 
-        let mut mat = SparseYale::zeros(nrow, ncol);
         let _ = s.split(|c| c == ';' || c == ',' || c == ' ')
             .map(|seg| seg.trim())
             .filter(|seg| !seg.is_empty())
             .map(|seg| {
-                let v = seg.parse().unwrap();
-                if v != mat.zero {
-                    mat.insert((idx / ncol, idx % ncol), v);
+                if seg != "0" {
+                    let v = seg.parse().unwrap();
+                    vals.push(v);
+                    rows.push(idx / ncol);
+                    cols.push(idx % ncol);
                 }
                 idx += 1;
             }).count();
-
-        Ok(mat)
+        Ok(Coo {
+            shape: (nrow, ncol),
+            data: vals,
+            rows: rows,
+            cols: cols
+        })
     }
-}*/
+}
 
 
 #[test]
@@ -428,8 +473,8 @@ fn test_sparse_matrix_build() {
     mat.set((0,0), 1.0);
     mat.set((1,2), 2.0);
 
-    println!("mat => \n{}", mat);
-    println!("mat => {:?}", mat);
+    assert_eq!(mat.get((0,0)), Some(&1.));
+    assert_eq!(mat.get((1,2)), Some(&2.));
 
     println!("mat.T => \n{}", mat.transpose());
     println!("mat.T => {:?}", mat.transpose());
@@ -448,4 +493,32 @@ fn test_sparse_matrix_build() {
     println!("mat => \n{}", mat);
     println!("mat => {:?}", mat);
 
+    let mut mat: SparseMatrix<i32> = SparseMatrix::Lil {
+        shape: (4,4),
+        data: vec![vec![3,1], vec![2,3], vec![], vec![1]],
+        rows: vec![vec![0,2], vec![1,3], vec![], vec![3]]
+    };
+    println!("mat => \n{}", mat);
+}
+
+
+#[test]
+fn test_parse_sparse_matrix() {
+    let mat: SparseMatrix<i32> =
+        r#"11 22 0 0 0 0 ;
+           0 33 44 0 0 0 ;
+           0 0 55 66 0 0 ;
+           0 0 0 77 88 0 ;
+           0 0 0 0 0 99  "#.parse().unwrap();
+
+    assert!(mat.nnz() == 9);
+    let m2 = mat.to_csr();
+    let m3 = mat.to_csc();
+    println!("debug \n{}\n{}", m3, m2);
+    for i in 0 .. 5 {
+        for j in 0 .. 6 {
+            assert!(mat.get((i,j)) == m2.get((i,j)), "mat[{:?}] equeals", (i,j));
+            assert!(mat.get((i,j)) == m3.get((i,j)), "mat[{:?}] equeals", (i,j));
+        }
+    }
 }
