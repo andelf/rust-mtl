@@ -49,7 +49,6 @@ pub enum SparseMatrix<T> {
         indices: Vec<usize>,    // CSR format index array
         indptr: Vec<usize>      // CSR format index pointer array
     },
-    // TODO:
     /// Sparse matrix with DIAgonal storage
     Dia {
         shape: (usize, usize),
@@ -89,6 +88,18 @@ impl<T: Zero + Copy> SparseMatrix<T> {
             Coo { ref data, .. } | Csr { ref data, .. } | Csc { ref data, .. } => data.len(),
             Lil { ref data, .. } => data.iter().map(|rs| rs.len()).sum(),
             Dok { ref data, .. } => data.len(),
+            Dia { shape, ref data, ref offsets } => {
+                let (m,n) = shape;
+                let mut nnz = 0;
+                for &k in offsets.iter() {
+                    if k > 0 {
+                        nnz += tools::min(m, n - k as usize);
+                    } else {
+                        nnz += tools::min((m as isize + k) as usize, n);
+                    }
+                }
+                nnz
+            },
             _ => unimplemented!()
         }
     }
@@ -147,6 +158,14 @@ impl<T: Zero + Copy> SparseMatrix<T> {
         }
     }
 
+    pub fn empty_dia(shape: (usize, usize)) -> Self {
+        Dia {
+            shape: shape,
+            data: vec![],
+            offsets: vec![]
+        }
+    }
+
     // get/set
     /// Returns the element of the given index, or None if not exists
     pub fn get(&self, index: (usize, usize)) -> Option<&T> {
@@ -191,6 +210,9 @@ impl<T: Zero + Copy> SparseMatrix<T> {
             Dok { ref data, .. } => {
                 data.get(&index)
             },
+            Dia { .. } => {
+                panic!("Indexing DIA matrix is not supported yet")
+            },
             _ => unimplemented!()
         }
     }
@@ -234,6 +256,9 @@ impl<T: Zero + Copy> SparseMatrix<T> {
             },
             Dok { ref mut data, .. } => {
                 return data.get_mut(&index);
+            },
+            Dia { .. } => {
+                panic!("Indexing DIA matrix is not supported yet")
             },
             _ => unimplemented!()
         }
@@ -306,6 +331,9 @@ impl<T: Zero + Copy> SparseMatrix<T> {
             Dok { ref mut data, .. } => {
                 let _ = data.insert(index, it);
             },
+            Dia { .. } => {
+                panic!("DIA matrix assignmentis not supported yet")
+            },
             _ => unimplemented!()
         }
     }
@@ -339,6 +367,7 @@ impl<T: Zero + Copy> SparseMatrix<T> {
             ref this @ Csc { .. } => this.clone(),
             ref this @ Lil { .. } => this.to_csr().to_csc(),
             ref this @ Dok { .. } => this.to_coo().to_csc(),
+            // ref this @ Dia { .. } => this.to_coo().to_csc(),
             _ => unimplemented!()
         }
     }
@@ -376,6 +405,7 @@ impl<T: Zero + Copy> SparseMatrix<T> {
             },
             ref this @ Csr { .. } => this.clone(),
             ref this @ Dok { .. } => this.to_coo().to_csr(),
+            // ref this @ Dia { .. } => this.to_coo().to_csr(),
             _ => unimplemented!()
         }
     }
@@ -426,6 +456,14 @@ impl<T: Zero + Copy> SparseMatrix<T> {
 
                 Coo { shape: shape, data: vals, rows: rows, cols: cols }
             },
+            /* TODO: implement this with Array
+            Dia { shape, ref data, ref offsets } => {
+                let data_len = shape.1;
+                let data_num = data.len();
+
+                (0..data_len)
+
+            },*/
             ref this @ Coo { .. } => this.clone(),
             ref this @ Lil { .. } => this.to_csr().to_coo(),
             _ => unimplemented!()
@@ -464,6 +502,7 @@ impl<T: Zero + Copy> SparseMatrix<T> {
             ref this @ Coo { .. } => this.to_csr().to_lil(),
             ref this @ Lil { .. } => this.clone(),
             ref this @ Dok { .. } => this.to_csr().to_lil(),
+            // ref this @ Dia { .. } => this.to_csr().to_lil(),
             _ => unimplemented!()
         }
     }
@@ -483,7 +522,7 @@ impl<T: Zero + Copy> SparseMatrix<T> {
             ref this @ Csc { .. } => this.to_coo().to_dok(),
             ref this @ Lil { .. } => this.to_coo().to_dok(),
             ref this @ Dok { .. } => this.clone(),
-            // ref this @ Dok { .. } => unimplemented!(),
+            // ref this @ Dia { .. } => this.to_coo().to_dok(),
             _ => unimplemented!()
         }
     }
@@ -527,7 +566,8 @@ impl<T: Zero + Copy> SparseMatrix<T> {
                     shape: new_shape,
                     data: dat
                 }
-            }
+            },
+            ref this @ Dia { .. } => this.to_csr().transpose(),
             _ => unimplemented!()
         }
     }
@@ -679,6 +719,7 @@ fn test_sparse_matrix_dok() {
     let m5 = mat.to_dok();
     let mt = mat.transpose();
 
+    assert_eq!(mat.nnz(), 9);
     for i in 0 .. 5 {
         for j in 0 .. 6 {
             assert!(mat.get((i,j)) == m1.get((i,j)), "mat[{:?}] equeals", (i,j));
