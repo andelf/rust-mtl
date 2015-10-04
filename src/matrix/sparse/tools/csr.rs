@@ -75,3 +75,36 @@ pub fn to_csc<T: Copy>(nrow: usize, ncol: usize, ap: &[usize], aj: &[usize], ax:
 
     (bp, bi, bx)
 }
+
+
+/*
+ * Sort CSR column indices inplace
+ *
+ * Input Arguments:
+ *   I  n_row           - number of rows in A
+ *   I  Ap[n_row+1]     - row pointer
+ *   I  Aj[nnz(A)]      - column indices
+ *   T  Ax[nnz(A)]      - nonzeros
+ *
+ */
+pub fn sort_indices<T: Copy>(nrow: usize, ap: &[usize], aj: &mut [usize], ax: &mut [T]) {
+    let mut temp: Vec<(usize,T)> = vec![];
+
+    for i in 0 .. nrow {
+        let row_start = ap[i];
+        let row_end = ap[i+1];
+
+        temp.clear();
+
+        for jj in row_start .. row_end {
+            temp.push((aj[jj], ax[jj]));
+        }
+
+        temp.sort_by(|a,b| a.0.cmp(&b.0));
+
+        for (n, jj) in (row_start .. row_end).enumerate() {
+            aj[jj] = temp[n].0;
+            ax[jj] = temp[n].1;
+        }
+    }
+}

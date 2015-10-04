@@ -380,6 +380,40 @@ impl<T: Zero + Copy> SparseMatrix<T> {
         }
     }
 
+    pub fn to_lil(&self) -> Self {
+        match *self {
+            Csr { shape, ref data, ref indptr, ref indices } => {
+                let nrow = shape.0;
+                let mut dat = data.clone();
+                let mut ind = indices.clone();
+
+                tools::csr::sort_indices(nrow, indptr, &mut ind, &mut dat);
+
+                let mut data: Vec<Vec<T>> = Vec::with_capacity(nrow);
+                let mut rows: Vec<Vec<usize>> = Vec::with_capacity(nrow);
+
+                for n in 0 .. nrow {
+                    let start = indptr[n];
+                    let end = indptr[n+1];
+
+                    // push() means insert at n
+                    rows.push(ind[start..end].to_vec());
+                    data.push(dat[start..end].to_vec());
+                }
+
+                Lil {
+                    shape: shape,
+                    data: data,
+                    rows: rows
+                }
+            },
+            ref this @ Csc { .. } => this.to_csr().to_lil(),
+            ref this @ Coo { .. } => this.to_csr().to_lil(),
+            ref this @ Lil { .. } => this.clone(),
+            _ => unimplemented!()
+        }
+    }
+
     // operation
     pub fn transpose(&self) -> Self {
         let new_shape = (self.shape().1, self.shape().0);
@@ -555,6 +589,10 @@ fn test_parse_sparse_matrix() {
     let m5 = m4.to_csr();
 
     let m6 = m5.to_coo();
+
+    let m7 = m5.to_lil();
+    let m8 = m4.to_lil();
+
     for i in 0 .. 5 {
         for j in 0 .. 6 {
             assert!(mat.get((i,j)) == m2.get((i,j)), "mat[{:?}] equeals", (i,j));
@@ -562,6 +600,8 @@ fn test_parse_sparse_matrix() {
             assert!(mat.get((i,j)) == m4.get((i,j)), "mat[{:?}] equeals", (i,j));
             assert!(mat.get((i,j)) == m5.get((i,j)), "mat[{:?}] equeals", (i,j));
             assert!(mat.get((i,j)) == m6.get((i,j)), "mat[{:?}] equeals", (i,j));
+            assert!(mat.get((i,j)) == m7.get((i,j)), "mat[{:?}] equeals", (i,j));
+            assert!(mat.get((i,j)) == m8.get((i,j)), "mat[{:?}] equeals", (i,j));
         }
     }
 }
