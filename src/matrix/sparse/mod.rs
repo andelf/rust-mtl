@@ -2,7 +2,7 @@
 
 use std::iter;
 use std::fmt;
-use std::ops;
+// use std::ops;
 use std::str::FromStr;
 use std::collections::BTreeMap;
 
@@ -225,6 +225,7 @@ impl<T: Zero + Copy> SparseMatrix<T> {
         None
     }
 
+    // CSC, CSR, COO, LIL
     pub fn set(&mut self, index: (usize, usize), it: T) {
         let (row, col) = index;
         assert!(row < self.shape().0);
@@ -292,6 +293,7 @@ impl<T: Zero + Copy> SparseMatrix<T> {
     }
 
     // convertion
+    // COO, CSR, CSC, LIL
     pub fn to_csc(&self) -> Self {
         let nnz = self.nnz();
         if nnz == 0 {
@@ -317,10 +319,13 @@ impl<T: Zero + Copy> SparseMatrix<T> {
                 }
             },
             ref this @ Csc { .. } => this.clone(),
+            ref this @ Lil { .. } => this.to_csr().to_csc(),
             _ => unimplemented!()
         }
     }
 
+    // COO, CSC, LIL, CSR
+    /// Return CSR format arrays for this matrix
     pub fn to_csr(&self) -> Self {
         let nnz = self.nnz();
         if nnz == 0 {
@@ -329,22 +334,33 @@ impl<T: Zero + Copy> SparseMatrix<T> {
         match *self {
             Coo { shape, ref data, ref rows, ref cols } => {
                 let (rowptr, col_indices, vals) = tools::coo::to_csr(shape.0, shape.1, nnz, rows, cols, data);
-                Csr {
-                    shape: shape,
-                    indptr: rowptr,
-                    indices: col_indices,
-                    data: vals
-                }
+                Csr { shape: shape, indptr: rowptr, indices: col_indices, data: vals }
             },
             Csc { shape, ref data, ref indptr, ref indices } => {
                 let (rowptr, col_indices, vals) = tools::csc::to_csr(shape.0, shape.1, indptr, indices, data);
                 Csr { shape: shape, indptr: rowptr, indices: col_indices, data: vals }
+            },
+            Lil { shape, ref data, ref rows } => {
+                let nrow = shape.0;
+                let mut indptr = Vec::with_capacity(nrow + 1);
+                // np.cumsum func in rust
+                let val = rows.iter().map(|r| r.len()).fold(0, |acc, n| {
+                    indptr.push(acc);
+                    acc + n
+                });
+                indptr.push(val);
+
+                let indices: Vec<usize> = rows.iter().flat_map(|r| r.clone()).collect();
+                let vals: Vec<T> = data.iter().flat_map(|r| r.clone()).collect();
+
+                Csr { shape: shape, indptr: indptr, indices: indices, data: vals }
             },
             ref this @ Csr { .. } => this.clone(),
             _ => unimplemented!()
         }
     }
 
+    // CSC, CSR, COO
     pub fn to_coo(&self) -> Self {
         match *self {
             Csc { shape, ref data, ref indptr, ref indices } => {
@@ -582,16 +598,22 @@ fn test_parse_sparse_matrix() {
            0 0 0 0 0 99  "#.parse().unwrap();
 
     assert!(mat.nnz() == 9);
+    // coo -> csr
     let m2 = mat.to_csr();
+    // coo -> csc
     let m3 = mat.to_csc();
-
+    // csr -> csc
     let m4 = m2.to_csc();
+    // csc -> csr
     let m5 = m4.to_csr();
-
+    // csr -> coo
     let m6 = m5.to_coo();
-
+    // csr -> lil
     let m7 = m5.to_lil();
+    // csc -> lil
     let m8 = m4.to_lil();
+    // lil -> csr
+    let m9 = m8.to_csr();
 
     for i in 0 .. 5 {
         for j in 0 .. 6 {
@@ -602,6 +624,7 @@ fn test_parse_sparse_matrix() {
             assert!(mat.get((i,j)) == m6.get((i,j)), "mat[{:?}] equeals", (i,j));
             assert!(mat.get((i,j)) == m7.get((i,j)), "mat[{:?}] equeals", (i,j));
             assert!(mat.get((i,j)) == m8.get((i,j)), "mat[{:?}] equeals", (i,j));
+            assert!(mat.get((i,j)) == m9.get((i,j)), "mat[{:?}] equeals", (i,j));
         }
     }
 }
