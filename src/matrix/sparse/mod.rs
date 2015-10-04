@@ -23,7 +23,7 @@ pub enum SparseMatrix<T> {
         data: Vec<T>,           // CSR format data array of the matrix
         indices: Vec<usize>,    // CSR format index array
         indptr: Vec<usize>,     // CSR format index pointer array
-        block_size: usize
+        block_size: (usize, usize)
     },
     /// A sparse matrix in COOrdinate format.
     /// Also known as the 'ijv' or 'triplet' format.
@@ -88,7 +88,7 @@ impl<T: Zero + Copy> SparseMatrix<T> {
             Coo { ref data, .. } | Csr { ref data, .. } | Csc { ref data, .. } => data.len(),
             Lil { ref data, .. } => data.iter().map(|rs| rs.len()).sum(),
             Dok { ref data, .. } => data.len(),
-            Dia { shape, ref data, ref offsets } => {
+            Dia { shape, ref offsets, .. } => {
                 let (m,n) = shape;
                 let mut nnz = 0;
                 for &k in offsets.iter() {
@@ -100,7 +100,10 @@ impl<T: Zero + Copy> SparseMatrix<T> {
                 }
                 nnz
             },
-            _ => unimplemented!()
+            Bsr { block_size, ref indptr, .. } => {
+                let (r,c) = block_size;
+                indptr.last().unwrap() * r * c
+            }
         }
     }
 
@@ -367,8 +370,8 @@ impl<T: Zero + Copy> SparseMatrix<T> {
             ref this @ Csc { .. } => this.clone(),
             ref this @ Lil { .. } => this.to_csr().to_csc(),
             ref this @ Dok { .. } => this.to_coo().to_csc(),
-            // ref this @ Dia { .. } => this.to_coo().to_csc(),
-            _ => unimplemented!()
+            ref this @ Dia { .. } => this.to_coo().to_csc(),
+            ref this @ Bsr { .. } => this.to_coo().to_csc()
         }
     }
 
@@ -405,8 +408,8 @@ impl<T: Zero + Copy> SparseMatrix<T> {
             },
             ref this @ Csr { .. } => this.clone(),
             ref this @ Dok { .. } => this.to_coo().to_csr(),
-            // ref this @ Dia { .. } => this.to_coo().to_csr(),
-            _ => unimplemented!()
+            ref this @ Dia { .. } => this.to_coo().to_csr(),
+            ref this @ Bsr { .. } => this.to_coo().to_csr()
         }
     }
 
@@ -464,6 +467,8 @@ impl<T: Zero + Copy> SparseMatrix<T> {
                 (0..data_len)
 
             },*/
+            // TODO
+            // Bsr { .. } => {},
             ref this @ Coo { .. } => this.clone(),
             ref this @ Lil { .. } => this.to_csr().to_coo(),
             _ => unimplemented!()
@@ -502,8 +507,8 @@ impl<T: Zero + Copy> SparseMatrix<T> {
             ref this @ Coo { .. } => this.to_csr().to_lil(),
             ref this @ Lil { .. } => this.clone(),
             ref this @ Dok { .. } => this.to_csr().to_lil(),
-            // ref this @ Dia { .. } => this.to_csr().to_lil(),
-            _ => unimplemented!()
+            ref this @ Dia { .. } => this.to_csr().to_lil(),
+            ref this @ Bsr { .. } => this.to_csr().to_lil()
         }
     }
 
@@ -522,9 +527,13 @@ impl<T: Zero + Copy> SparseMatrix<T> {
             ref this @ Csc { .. } => this.to_coo().to_dok(),
             ref this @ Lil { .. } => this.to_coo().to_dok(),
             ref this @ Dok { .. } => this.clone(),
-            // ref this @ Dia { .. } => this.to_coo().to_dok(),
-            _ => unimplemented!()
+            ref this @ Dia { .. } => this.to_coo().to_dok(),
+            ref this @ Bsr { .. } => this.to_coo().to_dok()
         }
+    }
+
+    pub fn to_bsr(&self) -> Self {
+        unimplemented!()
     }
 
     // operation
@@ -690,7 +699,7 @@ fn test_sparse_matrix_build() {
     println!("mat => {:?}", mat);
 
     // LIL matrix
-    let mut mat: SparseMatrix<i32> = SparseMatrix::Lil {
+    let mut mat: SparseMatrix<i32> = Lil {
         shape: (4,4),
         data: vec![vec![3,1], vec![2,3], vec![], vec![1]],
         rows: vec![vec![0,2], vec![1,3], vec![], vec![3]]

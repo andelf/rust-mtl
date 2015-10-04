@@ -6,6 +6,7 @@ pub mod lil;
 
 
 
+/*
 pub fn max<T: PartialOrd + Copy>(a: T, b: T) -> T {
     if a >= b {
         a
@@ -13,7 +14,7 @@ pub fn max<T: PartialOrd + Copy>(a: T, b: T) -> T {
         b
     }
 }
-
+*/
 
 pub fn min<T: PartialOrd + Copy>(a: T, b: T) -> T {
     if a <= b {
