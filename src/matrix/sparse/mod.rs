@@ -7,8 +7,10 @@ use std::str::FromStr;
 use std::collections::BTreeMap;
 
 use num::traits::Zero;
+use rand::{Rng, Rand, thread_rng};
 
 use super::ParseMatrixError;
+// TODO: reimplement using Array
 // use super::super::array::Array;
 
 use self::SparseMatrix::*;
@@ -489,7 +491,7 @@ impl<T: Zero + Copy + PartialEq> SparseMatrix<T> {
                 let mut vals = vec![];
 
                 for i in 0 .. data_num {
-                    for j in 0 .. data_len {
+                    for j in 0 .. data[0].len() {
                         let r = row[i][j];
                         let c = col[i][j];
                         let d = data[i][j];
@@ -502,10 +504,10 @@ impl<T: Zero + Copy + PartialEq> SparseMatrix<T> {
                 }
                 Coo { shape: shape, data: vals, rows: rows, cols: cols }
             },
-            // TODO
-            // Bsr { .. } => {},
             ref this @ Coo { .. } => this.clone(),
             ref this @ Lil { .. } => this.to_csr().to_coo(),
+            // TODO
+            // Bsr { .. } => {},
             _ => unimplemented!()
         }
     }
@@ -643,6 +645,48 @@ impl<T: Zero + Copy + PartialEq> SparseMatrix<T> {
             ref this @ Dia { .. } => this.to_csr().transpose(),
             _ => unimplemented!()
         }
+    }
+
+    // is_xxx
+    pub fn is_csr(&self) -> bool {
+        if let Csr { .. } = *self {
+            true
+        } else {
+            false
+        }
+    }
+
+    pub fn is_csc(&self) -> bool {
+        if let Csc { .. } = *self {
+            true
+        } else {
+            false
+        }
+    }
+
+    pub fn is_coo(&self) -> bool {
+        if let Coo { .. } = *self {
+            true
+        } else {
+            false
+        }
+    }
+
+}
+
+impl<T: Copy + Zero + PartialEq + Rand> SparseMatrix<T> {
+    pub fn rand(shape: (usize, usize)) -> Self {
+        let mut rng = thread_rng();
+        let mut mat = SparseMatrix::empty_coo(shape);
+        for i in 0 .. shape.0 * shape.1 {
+            if rng.gen_weighted_bool(9) {
+                let v = rng.gen();
+                if v != Zero::zero() {
+                    mat.set((i % shape.0, i / shape.0), v);
+                }
+            }
+        }
+        mat
     }
 }
 
@@ -857,4 +901,29 @@ fn test_parse_sparse_matrix() {
             assert!(mat.get((i,j)) == m11.get((i,j)), "mat[{:?}] equeals", (i,j));
         }
     }
+}
+
+
+#[test]
+fn test_rand() {
+    let mat: SparseMatrix<i32> = SparseMatrix::rand((10, 15));
+    println!("{}", mat);
+    // println!("{:?}", mat.to_dia());
+    let mats = vec![
+        mat.to_dia(),
+        mat.to_dok(),
+        mat.to_lil(),
+        mat.to_csr(),
+        mat.to_csc(),
+        mat.to_dia().to_coo(),
+        ];
+
+    for m in mats.iter() {
+        for i in 0 .. 5 {
+            for j in 0 .. 6 {
+                assert!(mat.get((i,j)) == m.get((i,j)), "{:?}", m);
+            }
+        }
+    }
+
 }
