@@ -568,8 +568,8 @@ fn test_matrix_multiply() {
 fn test_add() {
     use rand::{thread_rng, Rng};
 
-    let mut m1 = Matrix::<i16>::new(4, 4);
-    let m2 = Matrix::<i16>::eye(4);
+    let mut m1 = Matrix::<f32>::new(4, 4);
+    let m2 = Matrix::<f32>::eye(4);
 
     let mut rng = thread_rng();
 
