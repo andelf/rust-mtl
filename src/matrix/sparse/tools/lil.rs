@@ -1,5 +1,7 @@
 use num::traits::Zero;
 
+use super::bisect_left;
+
 /*
  Get a single item from LIL matrix.
     Doesn't do output type conversion. Checks for bounds errors.
@@ -44,23 +46,6 @@ pub fn get1_mut<'t, T: Copy>(m: usize, n: usize, rows: &[Vec<usize>], datas: &'t
     } else {
         None
     }
-}
-
-
-fn bisect_left<T: Copy + PartialOrd>(a: &[T], x: &T) -> usize {
-    let mut hi = a.len();
-    let mut lo = 0;
-    let mut mid: usize;
-
-    while lo < hi {
-        mid = lo + (hi - lo) / 2;
-        if &a[mid] < x {
-            lo = mid + 1;
-        } else {
-            hi = mid;
-        }
-    }
-    lo
 }
 
 

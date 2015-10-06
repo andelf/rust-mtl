@@ -69,7 +69,7 @@ pub enum SparseMatrix<T> {
 }
 
 
-impl<T: Zero + Copy> SparseMatrix<T> {
+impl<T: Zero + Copy + PartialEq> SparseMatrix<T> {
     /// Shape of the matrix
     pub fn shape(&self) -> (usize, usize) {
         match *self {
@@ -213,8 +213,15 @@ impl<T: Zero + Copy> SparseMatrix<T> {
             Dok { ref data, .. } => {
                 data.get(&index)
             },
-            Dia { .. } => {
-                panic!("Indexing DIA matrix is not supported yet")
+            Dia { ref data, ref offsets, .. } => {
+                let diff = col as isize - row as isize;
+                if let Some(pos) = offsets.iter().position(|&v| v == diff) {
+                    let v = &data[pos][(row as isize + diff) as usize];
+                    if *v != Zero::zero() {
+                       return Some(v);
+                    }
+                }
+                return None;
             },
             _ => unimplemented!()
         }
@@ -260,8 +267,15 @@ impl<T: Zero + Copy> SparseMatrix<T> {
             Dok { ref mut data, .. } => {
                 return data.get_mut(&index);
             },
-            Dia { .. } => {
-                panic!("Indexing DIA matrix is not supported yet")
+            Dia { ref mut data, ref offsets, .. } => {
+                let diff = col as isize - row as isize;
+                if let Some(pos) = offsets.iter().position(|&v| v == diff) {
+                    let v = &mut data[pos][(row as isize + diff) as usize];
+                    if *v != Zero::zero() {
+                       return Some(v);
+                    }
+                }
+                return None;
             },
             _ => unimplemented!()
         }
@@ -459,14 +473,35 @@ impl<T: Zero + Copy> SparseMatrix<T> {
 
                 Coo { shape: shape, data: vals, rows: rows, cols: cols }
             },
-            /* TODO: implement this with Array
             Dia { shape, ref data, ref offsets } => {
                 let data_len = shape.1;
                 let data_num = data.len();
 
-                (0..data_len)
+                let mut row: Vec<Vec<isize>> = iter::repeat((0..data_len as isize).collect::<Vec<isize>>()).take(data_num).collect();
+                let col = row.clone();
 
-            },*/
+                for (i, &k) in offsets.iter().enumerate() {
+                    let _ = row[i].iter_mut().map(|val| *val -= k).count();
+                }
+
+                let mut rows = vec![];
+                let mut cols = vec![];
+                let mut vals = vec![];
+
+                for i in 0 .. data_num {
+                    for j in 0 .. data_len {
+                        let r = row[i][j];
+                        let c = col[i][j];
+                        let d = data[i][j];
+                        if r >= 0 && r < shape.0 as isize && c < shape.1 as isize && d != Zero::zero() {
+                            rows.push(r as usize);
+                            cols.push(c as usize);
+                            vals.push(d);
+                        }
+                    }
+                }
+                Coo { shape: shape, data: vals, rows: rows, cols: cols }
+            },
             // TODO
             // Bsr { .. } => {},
             ref this @ Coo { .. } => this.clone(),
@@ -532,6 +567,35 @@ impl<T: Zero + Copy> SparseMatrix<T> {
         }
     }
 
+    pub fn to_dia(&self) -> Self {
+        match *self {
+            Coo { shape, ref data, ref rows, ref cols } => {
+                let ks: Vec<isize> = rows.iter().zip(cols.iter()).map(|(&r,&c)| c as isize - r as isize).collect();
+                let mut diags = ks.clone();
+                diags.sort();
+                diags.dedup();
+
+                let mut vals: Vec<Vec<T>> = vec![];
+                if data.len() > 0 {
+                    let col_max = cols.iter().cloned().max().expect("col.max()");
+                    for _ in 0 .. diags.len() {
+                        vals.push(iter::repeat(Zero::zero()).take(col_max+1).collect());
+                    }
+                    for (j, k) in ks.iter().enumerate() {
+                        let dia_pos = tools::bisect_left(&diags, k);
+                        vals[dia_pos][(rows[j] as isize + ks[j]) as usize] = data[j];
+                    }
+                }
+                Dia {
+                    shape: shape,
+                    data: vals,
+                    offsets: diags
+                }
+            },
+            ref this => this.to_coo().to_dia()
+        }
+    }
+
     pub fn to_bsr(&self) -> Self {
         unimplemented!()
     }
@@ -583,7 +647,7 @@ impl<T: Zero + Copy> SparseMatrix<T> {
 }
 
 
-impl<T: fmt::Display> fmt::Display for SparseMatrix<T> {
+impl<T: Copy + PartialEq + Zero + fmt::Display> fmt::Display for SparseMatrix<T> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
             Coo { ref data, ref rows, ref cols, .. } => {
@@ -619,6 +683,9 @@ impl<T: fmt::Display> fmt::Display for SparseMatrix<T> {
                     try!(writeln!(f, "  {:?}\t{}", key, value));
                 }
             },
+            ref this @ Dia { .. } => {
+                try!(write!(f, "{}", this.to_coo()));
+            }
             _ => unimplemented!()
         }
         Ok(())
@@ -771,6 +838,10 @@ fn test_parse_sparse_matrix() {
     // lil -> csr
     let m9 = m8.to_csr();
 
+    let m10 = mat.to_dia();
+
+    let m11 = m10.to_coo();
+
     for i in 0 .. 5 {
         for j in 0 .. 6 {
             assert!(mat.get((i,j)) == m1.get((i,j)), "mat[{:?}] equeals", (i,j));
@@ -782,6 +853,8 @@ fn test_parse_sparse_matrix() {
             assert!(mat.get((i,j)) == m7.get((i,j)), "mat[{:?}] equeals", (i,j));
             assert!(mat.get((i,j)) == m8.get((i,j)), "mat[{:?}] equeals", (i,j));
             assert!(mat.get((i,j)) == m9.get((i,j)), "mat[{:?}] equeals", (i,j));
+            assert!(mat.get((i,j)) == m10.get((i,j)), "mat[{:?}] equeals", (i,j));
+            assert!(mat.get((i,j)) == m11.get((i,j)), "mat[{:?}] equeals", (i,j));
         }
     }
 }
