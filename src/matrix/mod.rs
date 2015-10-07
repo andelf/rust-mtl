@@ -477,7 +477,6 @@ impl<T: PartialEq> PartialEq for Matrix<T> {
     }
 }
 
-// debug show
 impl<T: fmt::Debug> fmt::Debug for Matrix<T> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         try!(write!(f, "<Matrix dim={:?}, {:?}>", self.dim, self.data));

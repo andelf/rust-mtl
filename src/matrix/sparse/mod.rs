@@ -2,11 +2,11 @@
 
 use std::iter;
 use std::fmt;
-// use std::ops;
 use std::str::FromStr;
 use std::collections::BTreeMap;
+use std::ops::Neg;
 
-use num::traits::Zero;
+use num::traits::{Zero, Signed};
 use rand::{Rng, Rand, thread_rng};
 
 use super::ParseMatrixError;
@@ -106,6 +106,32 @@ impl<T: Zero + Copy + PartialEq> SparseMatrix<T> {
                 let (r,c) = block_size;
                 indptr.last().unwrap() * r * c
             }
+        }
+    }
+
+    // helper function
+    fn with_data<U, F>(&self, mut f: F) -> SparseMatrix<U> where F: FnMut(&T) -> U {
+        match *self {
+            Coo { shape, ref data, ref rows, ref cols } => {
+                Coo { shape: shape, data: data.iter().map(|v| f(v)).collect(), rows: rows.clone(), cols: cols.clone() }
+            },
+            Csc { shape, ref data, ref indices, ref indptr } => {
+                Csc { shape: shape, data: data.iter().map(|v| f(v)).collect(), indices: indices.clone(), indptr: indptr.clone() }
+            },
+            Csr { shape, ref data, ref indices, ref indptr } => {
+                Csr { shape: shape, data: data.iter().map(|v| f(v)).collect(), indices: indices.clone(), indptr: indptr.clone() }
+            },
+            Dia { shape, ref data, ref offsets } => {
+                Dia { shape: shape, data: data.iter().map(|ds| ds.iter().map(|v| f(v)).collect()).collect(), offsets: offsets.clone() }
+            },
+            Dok { shape, ref data } => {
+                let vals = data.clone().into_iter().map(|(k,v)| (k, f(&v))).collect();
+                Dok { shape: shape, data: vals }
+            }
+            Lil { shape, ref data, ref rows } => {
+                Lil { shape: shape, data: data.iter().map(|ls| ls.iter().map(|v| f(v)).collect()).collect(), rows: rows.clone() }
+            }
+            Bsr { .. } => unimplemented!()
         }
     }
 
@@ -506,9 +532,7 @@ impl<T: Zero + Copy + PartialEq> SparseMatrix<T> {
             },
             ref this @ Coo { .. } => this.clone(),
             ref this @ Lil { .. } => this.to_csr().to_coo(),
-            // TODO
-            // Bsr { .. } => {},
-            _ => unimplemented!()
+            Bsr { .. } => panic!("BSR matrix not implemented yet!")
         }
     }
 
@@ -588,11 +612,7 @@ impl<T: Zero + Copy + PartialEq> SparseMatrix<T> {
                         vals[dia_pos][(rows[j] as isize + ks[j]) as usize] = data[j];
                     }
                 }
-                Dia {
-                    shape: shape,
-                    data: vals,
-                    offsets: diags
-                }
+                Dia { shape: shape, data: vals, offsets: diags }
             },
             ref this => this.to_coo().to_dia()
         }
@@ -631,7 +651,6 @@ impl<T: Zero + Copy + PartialEq> SparseMatrix<T> {
                     cols: rows.clone()
                 }
             },
-            ref this @ Lil { .. } => this.to_csr().transpose().to_lil(),
             Dok { ref data, .. } => {
                 let mut dat = BTreeMap::new();
                 for (&(row, col), &val) in data.iter() {
@@ -642,8 +661,9 @@ impl<T: Zero + Copy + PartialEq> SparseMatrix<T> {
                     data: dat
                 }
             },
+            ref this @ Lil { .. } => this.to_csr().transpose().to_lil(),
             ref this @ Dia { .. } => this.to_csr().transpose(),
-            _ => unimplemented!()
+            Bsr { .. } => panic!("BSR matrix not implemented yet!")
         }
     }
 
@@ -671,15 +691,17 @@ impl<T: Zero + Copy + PartialEq> SparseMatrix<T> {
             false
         }
     }
-
 }
 
+
+
 impl<T: Copy + Zero + PartialEq + Rand> SparseMatrix<T> {
-    pub fn rand(shape: (usize, usize)) -> Self {
+    pub fn rand(shape: (usize, usize), sparsity: f64) -> Self {
         let mut rng = thread_rng();
         let mut mat = SparseMatrix::empty_coo(shape);
+        let weight = shape.0 * shape.1 / ((shape.0 * shape.1) as f64 * sparsity) as usize;
         for i in 0 .. shape.0 * shape.1 {
-            if rng.gen_weighted_bool(9) {
+            if rng.gen_weighted_bool(weight as u32) {
                 let v = rng.gen();
                 if v != Zero::zero() {
                     mat.set((i % shape.0, i / shape.0), v);
@@ -690,6 +712,34 @@ impl<T: Copy + Zero + PartialEq + Rand> SparseMatrix<T> {
     }
 }
 
+
+// simulate signed number
+impl<T: Zero + Copy + PartialEq + Signed> SparseMatrix<T> {
+    pub fn abs(&self) -> Self {
+        self.with_data(|v| v.abs())
+    }
+    // fn abs_sub(&self, other: &Self) -> Self {
+    //     self.with_data(|v| v.abs_sub())
+    // }
+    pub fn signum(&self) -> Self {
+        self.with_data(|v| v.signum())
+    }
+    // fn is_positive(&self) -> bool {
+    //     unimplemented!()
+    // }
+    // fn is_negative(&self) -> bool {
+    //     unimplemented!()
+    // }
+}
+
+
+impl<'a, T: Zero + Copy + PartialOrd + Neg> Neg for SparseMatrix<T> {
+    type Output = SparseMatrix<<T as Neg>::Output>;
+
+    fn neg(self) -> Self::Output {
+        (&self).with_data(|v| v.neg())
+    }
+}
 
 impl<T: Copy + PartialEq + Zero + fmt::Display> fmt::Display for SparseMatrix<T> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -905,10 +955,20 @@ fn test_parse_sparse_matrix() {
 
 
 #[test]
+fn test_ops() {
+    let mat: SparseMatrix<f32> = SparseMatrix::rand((40, 50), 0.01);
+    println!("\n{}", mat.to_dia());
+    println!("nnz => {}", mat.nnz());
+    println!("neg\n{}", mat.to_dia().abs());
+    println!("neg\n{}", mat.to_dia().neg());
+}
+
+
+
+#[test]
 fn test_rand() {
-    let mat: SparseMatrix<i32> = SparseMatrix::rand((10, 15));
-    println!("{}", mat);
-    // println!("{:?}", mat.to_dia());
+    let mat: SparseMatrix<i32> = SparseMatrix::rand((10, 15), 0.9);
+    // println!("{}", mat);
     let mats = vec![
         mat.to_dia(),
         mat.to_dok(),
@@ -925,5 +985,4 @@ fn test_rand() {
             }
         }
     }
-
 }
