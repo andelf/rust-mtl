@@ -2,7 +2,7 @@
 name = "mtl"
 version = "0.1.4"
 authors = ["andelf <andelf@gmail.com>"]
-license = "MIT"
+license = "MIT OR Apache-2.0"
 readme = "README.md"
 repository = "https://github.com/andelf/rust-mtl"
 description = "Matrix template library. Dense2D matrix, SparseMatrix."
