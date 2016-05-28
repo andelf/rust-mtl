@@ -1,7 +1,7 @@
 #[macro_use]
 extern crate mtl;
 
-use mtl::array::{Array, ToArray, concatenate};
+use mtl::ndarray::{Array, ToArray, concatenate};
 
 /*
 maximize:  13 * A + 23 * B

@@ -3,7 +3,7 @@ use std::fmt;
 use std::ops;
 
 use super::{Array, ArrayIx, ToArray, ArrayIndexIter};
-use super::super::traits::{ArrayType, ArrayShape};
+use super::super::traits::ArrayType;
 
 
 // RefArray
@@ -74,7 +74,7 @@ impl<'a, T: Copy, D: AsRef<[usize]>> ops::Index<D> for RefArray<'a, T> {
     type Output = T;
 
     #[inline]
-    fn index<'b>(&'b self, index: D) -> &'b T {
+    fn index(&self, index: D) -> &T {
         self.get(index).unwrap()
     }
 }
@@ -90,7 +90,7 @@ impl<'a, T: Copy + fmt::Display> fmt::Display for RefArray<'a, T> {
             } else {
                 ret.push('[');
                 for i in 0 .. dims[0] {
-                    let index = index.iter().map(|&i| i).chain(iter::once(i)).collect::<Vec<usize>>();
+                    let index = index.iter().cloned().chain(iter::once(i)).collect::<Vec<usize>>();
                     ret.push_str(&dump_ref_array_data(a, &dims[1..], nd-1, &index));
                     if i < dims[0] - 1 {
                         ret.push_str(", ");

@@ -664,19 +664,6 @@ impl<T: Copy> ToArray<T> for [T] {
     }
 }
 
-// multi-dimension ToArray support
-// FIXME: avoid clone() too much
-// impl<I: fmt::Debug, T: ToArray<I>> ToArray<I> for Vec<T> {
-//     fn to_array(&self) -> Array<I> {
-//         // add dimension
-//         let mut shape = self[0].to_array().shape();
-//         shape.insert(0, self.len());
-//         let t: Vec<I> = self.iter().map(|row| row.to_array()).flat_map(|arr| arr.data);
-//         println!("flatten => {:?}", t);
-//         Array::from_vec(t).reshape(shape)
-//     }
-// }
-
 #[test]
 fn test_array() {
     let mut v = Array::from_vec(vec![ 0,  1,  2,  3,  4,  5,  6,  7,

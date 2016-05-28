@@ -8,5 +8,5 @@ repository = "https://github.com/andelf/rust-mtl"
 description = "Matrix template library. Dense2D matrix, SparseMatrix."
 
 [dependencies]
-num = "0.1"
-rand = "0.3"
+num = "*"
+rand = "*"

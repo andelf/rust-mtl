@@ -4,7 +4,7 @@ use std::iter;
 use std::fmt;
 use std::str::FromStr;
 use std::collections::BTreeMap;
-use std::ops::Neg;
+use std::ops::{Neg, Add};
 
 use num::traits::{Zero, Signed};
 use rand::{Rng, Rand, thread_rng};
@@ -249,7 +249,7 @@ impl<T: Zero + Copy + PartialEq> SparseMatrix<T> {
                        return Some(v);
                     }
                 }
-                return None;
+                None
             },
             _ => unimplemented!()
         }
@@ -693,8 +693,6 @@ impl<T: Zero + Copy + PartialEq> SparseMatrix<T> {
     }
 }
 
-
-
 impl<T: Copy + Zero + PartialEq + Rand> SparseMatrix<T> {
     pub fn rand(shape: (usize, usize), sparsity: f64) -> Self {
         let mut rng = thread_rng();
@@ -718,18 +716,9 @@ impl<T: Zero + Copy + PartialEq + Signed> SparseMatrix<T> {
     pub fn abs(&self) -> Self {
         self.with_data(|v| v.abs())
     }
-    // fn abs_sub(&self, other: &Self) -> Self {
-    //     self.with_data(|v| v.abs_sub())
-    // }
     pub fn signum(&self) -> Self {
         self.with_data(|v| v.signum())
     }
-    // fn is_positive(&self) -> bool {
-    //     unimplemented!()
-    // }
-    // fn is_negative(&self) -> bool {
-    //     unimplemented!()
-    // }
 }
 
 
@@ -740,6 +729,20 @@ impl<'a, T: Zero + Copy + PartialOrd + Neg> Neg for SparseMatrix<T> {
         (&self).with_data(|v| v.neg())
     }
 }
+
+impl<T: Zero + Copy + PartialOrd + Add<T, Output=T>> Add for SparseMatrix<T> {
+    type Output = SparseMatrix<T>;
+
+    fn add(self, rhs: SparseMatrix<T>) -> Self::Output {
+        if self.shape() != rhs.shape() {
+            panic!("inconsistent shapes");
+        }
+        unimplemented!()
+    }
+}
+
+
+
 
 impl<T: Copy + PartialEq + Zero + fmt::Display> fmt::Display for SparseMatrix<T> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
