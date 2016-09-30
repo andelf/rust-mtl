@@ -384,7 +384,7 @@ impl<T: ops::Mul + Copy> Matrix<T> {
 // }
 
 // matrix multiply
-impl<T: ops::Mul<T, Output=T> + ops::Add<T, Output=T> + ::core::num::Zero + Copy> ops::Mul<Matrix<T>> for Matrix<T> {
+impl<T: ops::Mul<T, Output=T> + ops::Add<T, Output=T> + ::core::iter::Sum + Copy> ops::Mul<Matrix<T>> for Matrix<T> {
     type Output = Matrix<T>;
 
     fn mul(self, rhs: Matrix<T>) -> Matrix<T> {
@@ -392,7 +392,7 @@ impl<T: ops::Mul<T, Output=T> + ops::Add<T, Output=T> + ::core::num::Zero + Copy
     }
 }
 
-impl<'a, T: ops::Mul<T, Output=T> + ops::Add<T, Output=T> + ::core::num::Zero + Copy> ops::Mul<Matrix<T>> for &'a Matrix<T> {
+impl<'a, T: ops::Mul<T, Output=T> + ops::Add<T, Output=T> + ::core::iter::Sum + Copy> ops::Mul<Matrix<T>> for &'a Matrix<T> {
     type Output = Matrix<T>;
 
     fn mul(self, rhs: Matrix<T>) -> Matrix<T> {
@@ -400,7 +400,7 @@ impl<'a, T: ops::Mul<T, Output=T> + ops::Add<T, Output=T> + ::core::num::Zero + 
     }
 }
 
-impl<'a, T: ops::Mul<T, Output=T> + ops::Add<T, Output=T> + ::core::num::Zero + Copy> ops::Mul<&'a Matrix<T>> for Matrix<T> {
+impl<'a, T: ops::Mul<T, Output=T> + ops::Add<T, Output=T> + ::core::iter::Sum + Copy> ops::Mul<&'a Matrix<T>> for Matrix<T> {
     type Output = Matrix<T>;
 
     fn mul(self, rhs: &'a Matrix<T>) -> Matrix<T> {
@@ -408,7 +408,7 @@ impl<'a, T: ops::Mul<T, Output=T> + ops::Add<T, Output=T> + ::core::num::Zero + 
     }
 }
 
-impl<'a, 'b, T: ops::Mul<T, Output=T> + ops::Add<T, Output=T> + ::core::num::Zero + Copy> ops::Mul<&'a Matrix<T>> for &'b Matrix<T> {
+impl<'a, 'b, T: ops::Mul<T, Output=T> + ops::Add<T, Output=T> + ::core::iter::Sum +  Copy> ops::Mul<&'a Matrix<T>> for &'b Matrix<T> {
     type Output = Matrix<T>;
 
     fn mul(self, rhs: &'a Matrix<T>) -> Matrix<T> {

@@ -1,4 +1,4 @@
-#![feature(unboxed_closures, fixed_size_array, zero_one, iter_arith)]
+#![feature(unboxed_closures, fixed_size_array)]
 #![warn(bad_style, unused, unused_import_braces,
         unused_qualifications, unused_results)]
 #![allow(unknown_lints)]
