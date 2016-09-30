@@ -1,6 +1,6 @@
 [package]
 name = "mtl"
-version = "0.1.4"
+version = "0.1.5"
 authors = ["andelf <andelf@gmail.com>"]
 license = "MIT OR Apache-2.0"
 readme = "README.md"
@@ -8,5 +8,5 @@ repository = "https://github.com/andelf/rust-mtl"
 description = "Matrix template library. Dense2D matrix, SparseMatrix."
 
 [dependencies]
-num = "*"
-rand = "*"
+num = "0.1"
+rand = "0.3"
